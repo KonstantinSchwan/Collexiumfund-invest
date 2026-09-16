@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Private Fund</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #17202a;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+    padding: 16px;
+}
+
+h1 {
+    margin: 5px 0 18px;
+    font-size: 25px;
+}
+
+h2 {
+    font-size: 20px;
+    margin-top: 0;
+}
+
+.card {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+.coin-card,
+.project-card {
+    border: 1px solid #e3e7eb;
+    border-radius: 12px;
+    padding: 13px;
+    margin-top: 10px;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.amount {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.small {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+button {
+    border: 0;
+    border-radius: 11px;
+    padding: 11px 15px;
+    font-size: 15px;
+    cursor: pointer;
+    background: #2481cc;
+    color: white;
+    margin-top: 8px;
+}
+
+button.secondary {
+    background: #e9eef3;
+    color: #17202a;
+}
+
+button.danger {
+    background: #e55353;
+}
+
+button.green {
+    background: #27a66f;
+}
+
+input, select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccd3da;
+    border-radius: 10px;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    background: white;
+}
+
+label {
+    font-size: 13px;
+    color: #5b6470;
+}
+
+nav {
+    display: flex;
+    gap: 5px;
+    background: white;
+    padding: 6px;
+    border-radius: 14px;
+    margin-bottom: 15px;
+    position: sticky;
+    top: 5px;
+    z-index: 10;
+}
+
+nav button {
+    flex: 1;
+    margin: 0;
+    background: transparent;
+    color: #555;
+    padding: 10px 5px;
+}
+
+nav button.active {
+    background: #2481cc;
+    color: white;
+}
+
+.hidden {
+    display: none;
+}
+
+.total {
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.status {
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: #eef5ff;
+    color: #2471b8;
+    display: inline-block;
+    font-size: 13px;
+    margin-top: 8px;
+}
+
+.warning {
+    background: #fff4d6;
+    color: #8a6200;
+}
+
+.success {
+    background: #e5f8ef;
+    color: #168553;
+}
+
+.error {
+    background: #ffe8e8;
+    color: #bd3030;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid #eee;
+    margin: 15px 0;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-box {
+    background: white;
+    width: 100%;
+    max-width: 700px;
+    padding: 20px;
+    border-radius: 20px 20px 0 0;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.close {
+    float: right;
+    background: #eee;
+    color: #333;
+    margin: 0;
+}
+
+.empty {
+    text-align: center;
+    color: #777;
+    padding: 25px 10px;
+}
+
+.history-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.plus {
+    color: #15945c;
+}
+
+.minus {
+    color: #c93636;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🏦 Private Fund</h1>
+
+<nav>
+    <button id="navFund" class="active" onclick="showPage('fund')">🏦 Фонд</button>
+    <button id="navProjects" onclick="showPage('projects')">📊 Проекты</button>
+    <button id="navHistory" onclick="showPage('history')">📜 История</button>
+</nav>
+
+<!-- ФОНД -->
+<div id="pageFund">
+
+    <div class="card">
+        <div class="row">
+            <div>
+                <h2>💰 Фонд</h2>
+                <div class="small">Текущие средства</div>
+            </div>
+            <button onclick="openDeposit()">＋ Поступление</button>
+        </div>
+
+        <div id="fundCoins"></div>
+    </div>
+
+    <div class="card">
+        <h2>💸 К выводу</h2>
+        <div id="withdrawals"></div>
+    </div>
+
+</div>
+
+
+<!-- ПРОЕКТЫ -->
+<div id="pageProjects" class="hidden">
+
+    <div class="card">
+        <div class="row">
+            <div>
+                <h2>📊 Проекты</h2>
+                <div class="small">Распределение фонда</div>
+            </div>
+            <button onclick="openProject()">＋ Проект</button>
+        </div>
+
+        <div id="percentTotal"></div>
+    </div>
+
+    <div id="projectsList"></div>
+
+</div>
+
+
+<!-- ИСТОРИЯ -->
+<div id="pageHistory" class="hidden">
+
+    <div class="card">
+        <h2>📜 История</h2>
+        <div id="historyList"></div>
+    </div>
+
+</div>
+
+
+<!-- MODAL -->
+<div id="modal" class="modal hidden">
+    <div class="modal-box">
+        <button class="close" onclick="closeModal()">✕</button>
+        <div id="modalContent"></div>
+    </div>
+</div>
+
+
+<script>
+
+/* =========================
+   ДАННЫЕ
+========================= */
+
+let data = JSON.parse(localStorage.getItem("privateFundData")) || {
+    coins: [],
+    projects: [],
+    withdrawals: [],
+    history: []
+};
+
+function save() {
+    localStorage.setItem("privateFundData", JSON.stringify(data));
+}
+
+
+/* =========================
+   TELEGRAM
+========================= */
+
+if (window.Telegram && Telegram.WebApp) {
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+}
+
+
+/* =========================
+   НАВИГАЦИЯ
+========================= */
+
+function showPage(page) {
+
+    document.getElementById("pageFund").classList.add("hidden");
+    document.getElementById("pageProjects").classList.add("hidden");
+    document.getElementById("pageHistory").classList.add("hidden");
+
+    document.getElementById("navFund").classList.remove("active");
+    document.getElementById("navProjects").classList.remove("active");
+    document.getElementById("navHistory").classList.remove("active");
+
+    if (page === "fund") {
+        document.getElementById("pageFund").classList.remove("hidden");
+        document.getElementById("navFund").classList.add("active");
+    }
+
+    if (page === "projects") {
+        document.getElementById("pageProjects").classList.remove("hidden");
+        document.getElementById("navProjects").classList.add("active");
+    }
+
+    if (page === "history") {
+        document.getElementById("pageHistory").classList.remove("hidden");
+        document.getElementById("navHistory").classList.add("active");
+    }
+
+    render();
+}
+
+
+/* =========================
+   ВСПОМОГАТЕЛЬНОЕ
+========================= */
+
+function money(n) {
+    return Number(n || 0).toLocaleString("ru-RU", {
+        maximumFractionDigits: 8
+    });
+}
+
+function dateNow() {
+    return new Date().toLocaleString("ru-RU");
+}
+
+function getCoin(id) {
+    return data.coins.find(c => c.id === id);
+}
+
+function getProject(id) {
+    return data.projects.find(p => p.id === id);
+}
+
+function addHistory(type, text) {
+    data.history.unshift({
+        id: Date.now(),
+        type,
+        text,
+        date: dateNow()
+    });
+}
+
+
+/* =========================
+   ФОНД
+========================= */
+
+function renderFund() {
+
+    const box = document.getElementById("fundCoins");
+
+    if (!data.coins.length) {
+        box.innerHTML = `
+            <div class="empty">
+                Пока нет монет.<br>
+                Добавь первую монету в настройках проекта или через поступление.
+            </div>
+        `;
+        return;
+    }
+
+    box.innerHTML = data.coins.map(c => {
+
+        return `
+        <div class="coin-card">
+            <div class="row">
+                <div>
+                    <b>🪙 ${escapeHtml(c.name)}</b>
+                    <div class="small">Баланс фонда</div>
+                </div>
+
+                <div class="amount">${money(c.balance)}</div>
+            </div>
+        </div>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================
+   ПОСТУПЛЕНИЕ
+========================= */
+
+function openDeposit() {
+
+    let coinOptions = data.coins.map(c =>
+        `<option value="${c.id}">${escapeHtml(c.name)}</option>`
+    ).join("");
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>📥 Поступление</h2>
+
+        <label>Монета</label>
+        <select id="depositCoin">
+            ${coinOptions}
+        </select>
+
+        <label>Количество</label>
+        <input id="depositAmount" type="number" step="any" placeholder="Например: 1000">
+
+        <button onclick="deposit()">Добавить поступление</button>
+
+        <hr>
+
+        <button class="secondary" onclick="openCoin()">＋ Добавить новую монету</button>
+    `;
+
+    openModal();
+}
+
+function deposit() {
+
+    const coinId = document.getElementById("depositCoin").value;
+    const amount = Number(document.getElementById("depositAmount").value);
+
+    if (!coinId || !amount || amount <= 0) {
+        alert("Введите корректную сумму.");
+        return;
+    }
+
+    const coin = getCoin(coinId);
+
+    coin.balance += amount;
+
+    /*
+       Новое поступление автоматически распределяется
+       между проектами этой монеты по их процентам.
+    */
+
+    const projects = data.projects.filter(p => p.coinId === coinId);
+
+    projects.forEach(p => {
+        p.available += amount * (p.percent / 100);
+    });
+
+    addHistory(
+        "deposit",
+        `Поступление +${money(amount)} ${coin.name}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   МОНЕТЫ
+========================= */
+
+function openCoin() {
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>🪙 Новая монета</h2>
+
+        <label>Название монеты</label>
+        <input id="coinName" placeholder="Например: AXM">
+
+        <button onclick="addCoin()">Создать монету</button>
+    `;
+}
+
+function addCoin() {
+
+    const name = document.getElementById("coinName").value.trim();
+
+    if (!name) {
+        alert("Введите название.");
+        return;
+    }
+
+    if (data.coins.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+        alert("Такая монета уже существует.");
+        return;
+    }
+
+    data.coins.push({
+        id: Date.now().toString(),
+        name: name,
+        balance: 0
+    });
+
+    addHistory("coin", `Добавлена монета ${name}`);
+
+    save();
+
+    openDeposit();
+}
+
+
+/* =========================
+   ПРОЕКТЫ
+========================= */
+
+function renderProjects() {
+
+    const list = document.getElementById("projectsList");
+
+    if (!data.projects.length) {
+        list.innerHTML = `
+            <div class="card empty">
+                Пока нет проектов.<br>
+                Нажми «＋ Проект», чтобы создать первый.
+            </div>
+        `;
+
+        document.getElementById("percentTotal").innerHTML = "";
+        return;
+    }
+
+    const total = data.projects.reduce(
+        (sum, p) => sum + Number(p.percent),
+        0
+    );
+
+    let statusClass = "success";
+    let statusText = "100% — распределение корректное";
+
+    if (Math.abs(total - 100) > 0.000001) {
+
+        statusClass = "error";
+
+        if (total > 100) {
+            statusText = `${money(total)}% — превышение на ${money(total - 100)}%`;
+        } else {
+            statusText = `${money(total)}% — не хватает ${money(100 - total)}%`;
+        }
+    }
+
+    document.getElementById("percentTotal").innerHTML = `
+        <div class="status ${statusClass}">
+            Распределение: <b>${money(total)}%</b><br>
+            ${statusText}
+        </div>
+    `;
+
+    list.innerHTML = data.projects.map(p => {
+
+        const coin = getCoin(p.coinId);
+
+        return `
+        <div class="card project-card">
+
+            <div class="row">
+                <div>
+                    <h2>📁 ${escapeHtml(p.name)}</h2>
+                    <div class="small">
+                        ${coin ? escapeHtml(coin.name) : "Монета удалена"}
+                    </div>
+                </div>
+
+                <b>${money(p.percent)}%</b>
+            </div>
+
+            <hr>
+
+            <div class="row">
+                <div>
+                    <div class="small">Доступно для инвестирования</div>
+                    <div class="amount">
+                        ${money(p.available)} ${coin ? escapeHtml(coin.name) : ""}
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top:12px">
+                <div class="small">Всего инвестировано</div>
+                <b>${money(p.invested)} ${coin ? escapeHtml(coin.name) : ""}</b>
+            </div>
+
+            <button class="green" onclick="openInvest('${p.id}')">
+                📤 Инвестировать
+            </button>
+
+            <button onclick="openProfit('${p.id}')">
+                📈 Добавить прибыль
+            </button>
+
+            <button class="secondary" onclick="openProject('${p.id}')">
+                ✏️ Изменить
+            </button>
+
+            <button class="danger" onclick="deleteProject('${p.id}')">
+                🗑 Удалить
+            </button>
+
+        </div>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================
+   СОЗДАНИЕ / ИЗМЕНЕНИЕ ПРОЕКТА
+========================= */
+
+function openProject(id = null) {
+
+    const project = id ? getProject(id) : null;
+
+    let coinOptions = data.coins.map(c => `
+        <option value="${c.id}"
+            ${project && project.coinId === c.id ? "selected" : ""}>
+            ${escapeHtml(c.name)}
+        </option>
+    `).join("");
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>${project ? "✏️ Изменить проект" : "📊 Новый проект"}</h2>
+
+        ${
+            !data.coins.length
+            ?
+            `
+            <div class="status warning">
+                Сначала нужно создать монету.
+            </div>
+
+            <button onclick="openCoin()">＋ Создать монету</button>
+            `
+            :
+            `
+            <label>Название проекта</label>
+            <input id="projectName"
+                value="${project ? escapeAttr(project.name) : ""}"
+                placeholder="Например: Axiome">
+
+            <label>Монета</label>
+            <select id="projectCoin">
+                ${coinOptions}
+            </select>
+
+            <label>Процент распределения</label>
+            <input id="projectPercent"
+                type="number"
+                step="0.01"
+                value="${project ? project.percent : ""}"
+                placeholder="Например: 20">
+
+            <div class="small">
+                Все проекты этой монеты должны в сумме составлять ровно 100%.
+            </div>
+
+            <button onclick="saveProject('${id || ""}')">
+                💾 Сохранить
+            </button>
+            `
+        }
+    `;
+}
+
+function saveProject(id) {
+
+    const name = document.getElementById("projectName").value.trim();
+    const coinId = document.getElementById("projectCoin").value;
+    const percent = Number(document.getElementById("projectPercent").value);
+
+    if (!name || !coinId || percent < 0) {
+        alert("Заполни все поля.");
+        return;
+    }
+
+    /*
+       Проверяем проценты отдельно для каждой монеты.
+    */
+
+    let total = 0;
+
+    data.projects.forEach(p => {
+
+        if (p.coinId === coinId && p.id !== id) {
+            total += Number(p.percent);
+        }
+
+    });
+
+    total += percent;
+
+    if (Math.abs(total - 100) > 0.000001) {
+
+        alert(
+            `Для монеты ${getCoin(coinId).name} сумма процентов должна быть ровно 100%.\n\n` +
+            `Сейчас получится: ${total}%`
+        );
+
+        return;
+    }
+
+    if (id) {
+
+        const project = getProject(id);
+
+        project.name = name;
+        project.coinId = coinId;
+        project.percent = percent;
+
+    } else {
+
+        data.projects.push({
+            id: Date.now().toString(),
+            name,
+            coinId,
+            percent,
+            available: 0,
+            invested: 0
+        });
+
+    }
+
+    addHistory(
+        "project",
+        `${id ? "Изменён" : "Создан"} проект: ${name}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ИНВЕСТИЦИЯ
+========================= */
+
+function openInvest(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>📤 Инвестировать</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b><br>
+            Доступно: <b>${money(p.available)} ${escapeHtml(coin.name)}</b>
+        </p>
+
+        <label>Сколько инвестировать?</label>
+        <input id="investAmount"
+            type="number"
+            step="any"
+            max="${p.available}"
+            placeholder="Введите сумму">
+
+        <button class="green" onclick="invest('${id}')">
+            Подтвердить инвестицию
+        </button>
+    `;
+
+    openModal();
+}
+
+function invest(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    const amount = Number(document.getElementById("investAmount").value);
+
+    if (!amount || amount <= 0) {
+        alert("Введите сумму.");
+        return;
+    }
+
+    if (amount > p.available) {
+        alert("Недостаточно доступных средств.");
+        return;
+    }
+
+    p.available -= amount;
+    p.invested += amount;
+
+    coin.balance -= amount;
+
+    addHistory(
+        "invest",
+        `Инвестиция: ${money(amount)} ${coin.name} → ${p.name}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ПРИБЫЛЬ
+========================= */
+
+function openProfit(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>📈 Прибыль проекта</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b>
+        </p>
+
+        <label>Полученная прибыль</label>
+        <input id="profitAmount"
+            type="number"
+            step="any"
+            placeholder="Например: 100">
+
+        <div class="small">
+            По текущему правилу 50% пойдёт на реинвестирование,
+            50% — на вывод.
+        </div>
+
+        <button onclick="addProfit('${id}')">
+            Добавить прибыль
+        </button>
+    `;
+
+    openModal();
+}
+
+function addProfit(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    const profit = Number(
+        document.getElementById("profitAmount").value
+    );
+
+    if (!profit || profit <= 0) {
+        alert("Введите прибыль.");
+        return;
+    }
+
+    const reinvest = profit * 0.5;
+    const withdraw = profit * 0.5;
+
+    /*
+       50% прибыли распределяем между ВСЕМИ
+       проектами этой монеты.
+    */
+
+    const projects = data.projects.filter(
+        x => x.coinId === p.coinId
+    );
+
+    projects.forEach(project => {
+        project.available += reinvest * (project.percent / 100);
+    });
+
+    /*
+       50% прибыли добавляем в сумму на вывод.
+    */
+
+    let existing = data.withdrawals.find(
+        w => w.coinId === p.coinId
+    );
+
+    if (!existing) {
+
+        existing = {
+            id: Date.now().toString(),
+            coinId: p.coinId,
+            amount: 0,
+            sent: 0
+        };
+
+        data.withdrawals.push(existing);
+    }
+
+    existing.amount += withdraw;
+
+    /*
+       В фонд добавляется вся прибыль.
+       После этого половина считается распределённой
+       проектам, а половина ожидает вывода.
+    */
+
+    coin.balance += profit;
+
+    addHistory(
+        "profit",
+        `Прибыль ${money(profit)} ${coin.name} от ${p.name}. ` +
+        `Реинвест: ${money(reinvest)}, вывод: ${money(withdraw)}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ВЫВОД
+========================= */
+
+function renderWithdrawals() {
+
+    const box = document.getElementById("withdrawals");
+
+    const active = data.withdrawals.filter(
+        w => w.amount - w.sent > 0.00000001
+    );
+
+    if (!active.length) {
+        box.innerHTML = `
+            <div class="empty">
+                Пока ничего не нужно вывести.
+            </div>
+        `;
+        return;
+    }
+
+    box.innerHTML = active.map(w => {
+
+        const coin = getCoin(w.coinId);
+
+        const remaining = w.amount - w.sent;
+
+        return `
+        <div class="coin-card">
+
+            <div class="row">
+                <div>
+                    <b>💸 ${escapeHtml(coin.name)}</b>
+                    <div class="small">Осталось отправить</div>
+                </div>
+
+                <div class="amount">
+                    ${money(remaining)}
+                </div>
+            </div>
+
+            <button onclick="openWithdrawal('${w.id}')">
+                📤 Указать отправленную сумму
+            </button>
+
+        </div>
+        `;
+
+    }).join("");
+}
+
+function openWithdrawal(id) {
+
+    const w = data.withdrawals.find(x => x.id === id);
+    const coin = getCoin(w.coinId);
+
+    const remaining = w.amount - w.sent;
+
+    document.getElementById("modalContent").innerHTML = `
+
+        <h2>💸 Вывод ${escapeHtml(coin.name)}</h2>
+
+        <p>
+            Нужно отправить:
+            <b>${money(remaining)} ${escapeHtml(coin.name)}</b>
+        </p>
+
+        <label>Фактически отправлено</label>
+
+        <input id="sentAmount"
+            type="number"
+            step="any"
+            max="${remaining}"
+            placeholder="Например: 50">
+
+        <button class="green" onclick="registerWithdrawal('${id}')">
+            Подтвердить
+        </button>
+    `;
+
+    openModal();
+}
+
+function registerWithdrawal(id) {
+
+    const w = data.withdrawals.find(x => x.id === id);
+    const coin = getCoin(w.coinId);
+
+    const remaining = w.amount - w.sent;
+
+    const amount = Number(
+        document.getElementById("sentAmount").value
+    );
+
+    if (!amount || amount <= 0) {
+        alert("Введите сумму.");
+        return;
+    }
+
+    if (amount > remaining) {
+        alert("Нельзя отправить больше оставшейся суммы.");
+        return;
+    }
+
+    w.sent += amount;
+
+    coin.balance -= amount;
+
+    addHistory(
+        "withdraw",
+        `Вывод: ${money(amount)} ${coin.name}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ИСТОРИЯ
+========================= */
+
+function renderHistory() {
+
+    const box = document.getElementById("historyList");
+
+    if (!data.history.length) {
+        box.innerHTML = `
+            <div class="empty">
+                История пока пустая.
+            </div>
+        `;
+        return;
+    }
+
+    box.innerHTML = data.history.map(h => {
+
+        return `
+        <div class="history-item">
+            <div>${escapeHtml(h.text)}</div>
+            <div class="small">${h.date}</div>
+        </div>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================
+   УДАЛЕНИЕ
+========================= */
+
+function deleteProject(id) {
+
+    const p = getProject(id);
+
+    if (!confirm(
+        `Удалить проект "${p.name}"?\n\n` +
+        `Это нельзя будет отменить.`
+    )) {
+        return;
+    }
+
+    data.projects = data.projects.filter(x => x.id !== id);
+
+    addHistory(
+        "project",
+        `Удалён проект: ${p.name}`
+    );
+
+    save();
+    render();
+}
+
+
+/* =========================
+   MODAL
+========================= */
+
+function openModal() {
+    document.getElementById("modal").classList.remove("hidden");
+}
+
+function closeModal() {
+    document.getElementById("modal").classList.add("hidden");
+}
+
+
+/* =========================
+   БЕЗОПАСНЫЙ HTML
+========================= */
+
+function escapeHtml(text) {
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text);
+}
+
+
+/* =========================
+   ОБНОВЛЕНИЕ ЭКРАНА
+========================= */
+
+function render() {
+    renderFund();
+    renderProjects();
+    renderWithdrawals();
+    renderHistory();
+}
+
+render();
+
+</script>
+
+</body>
+</html>
+
+
