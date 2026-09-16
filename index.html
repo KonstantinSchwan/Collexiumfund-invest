@@ -1393,12 +1393,16 @@ function openExchangeToAsset(id) {
             max="${p.available}"
             placeholder="Например: 500">
 
-        <label>Получил монету</label>
+        <label>Какую монету получил?</label>
         <input id="exchangeAssetName"
             value="${p.assetName ? escapeAttr(p.assetName) : ""}"
-            placeholder="Например: BYA">
+            placeholder="Например: BYA, USDT, BTC">
 
-        <label>Получил количество</label>
+        <div class="small">
+            Обязательно укажи тикер монеты, которую получил при обмене.
+        </div>
+
+        <label>Сколько этой монеты получил?</label>
         <input id="exchangeAssetAmount"
             type="number"
             step="any"
@@ -1428,7 +1432,7 @@ function exchangeToAsset(id) {
     const assetAmount = Number(document.getElementById("exchangeAssetAmount").value);
 
     if (!fromAmount || fromAmount <= 0 || !assetName || !assetAmount || assetAmount <= 0) {
-        alert("Укажи сколько отдал, название монеты и сколько получил.");
+        alert("Укажи: сколько отдал, КАКУЮ монету получил и сколько этой монеты получил.");
         return;
     }
 
@@ -1749,7 +1753,12 @@ function openExitExchange(id) {
             max="${pending}"
             value="${pending}">
 
-        <label>Получил (${escapeHtml(coin.name)})</label>
+        <label>Какую монету получил?</label>
+        <input id="exitToCoin"
+            value="${escapeAttr(coin.name)}"
+            placeholder="Например: AXM, USDT">
+
+        <label>Сколько этой монеты получил?</label>
         <input id="exitToAmount"
             type="number"
             step="any"
@@ -1757,8 +1766,8 @@ function openExitExchange(id) {
             placeholder="Например: 55">
 
         <div class="small">
-            Укажи фактический результат обратного обмена.
-            Полученные ${escapeHtml(coin.name)} попадут в «К выводу».
+            Укажи фактический результат обратного обмена:
+            какую монету получил и точное количество.
         </div>
 
         <button class="green" onclick="exchangeProfitForWithdrawal('${id}')">
@@ -1776,11 +1785,12 @@ function exchangeProfitForWithdrawal(id) {
     const coin = getCoin(p.coinId);
 
     const fromAmount = Number(document.getElementById("exitFromAmount").value);
+    const toCoinName = document.getElementById("exitToCoin").value.trim().toUpperCase();
     const toAmount = Number(document.getElementById("exitToAmount").value);
     const pending = getPendingExitAmount(p);
 
-    if (!fromAmount || fromAmount <= 0 || !toAmount || toAmount <= 0) {
-        alert("Укажи обе суммы обмена.");
+    if (!fromAmount || fromAmount <= 0 || !toCoinName || !toAmount || toAmount <= 0) {
+        alert("Укажи: сколько отдал, КАКУЮ монету получил и сколько этой монеты получил.");
         return;
     }
 
@@ -1800,14 +1810,29 @@ function exchangeProfitForWithdrawal(id) {
 
     p.pendingExit = p.pendingExit.filter(x => Number(x.amount) > 0.00000001);
 
+    // Находим или создаём монету, которую фактически получили.
+    let toCoin = data.coins.find(
+        c => c.name.toLowerCase() === toCoinName.toLowerCase()
+    );
+
+    if (!toCoin) {
+        toCoin = {
+            id: (Date.now() + 1).toString(),
+            name: toCoinName,
+            balance: 0
+        };
+        data.coins.push(toCoin);
+        addHistory("coin", `Добавлена монета ${toCoinName} через обмен прибыли`);
+    }
+
     let existing = data.withdrawals.find(
-        w => w.coinId === p.coinId
+        w => w.coinId === toCoin.id
     );
 
     if (!existing) {
         existing = {
-            id: Date.now().toString(),
-            coinId: p.coinId,
+            id: (Date.now() + 2).toString(),
+            coinId: toCoin.id,
             amount: 0,
             sent: 0
         };
@@ -1815,11 +1840,11 @@ function exchangeProfitForWithdrawal(id) {
     }
 
     existing.amount += toAmount;
-    coin.balance += toAmount;
+    toCoin.balance += toAmount;
 
     addHistory(
         "exchange",
-        `${p.name}: для вывода обменено ${money(fromAmount)} ${p.assetName} → ${money(toAmount)} ${coin.name}`
+        `${p.name}: для вывода обменено ${money(fromAmount)} ${p.assetName} → ${money(toAmount)} ${toCoinName}`
     );
 
     save();
