@@ -200,7 +200,6 @@ label{
     position:fixed;
     inset:0;
     z-index:1000;
-    display:none;
     align-items:flex-end;
     justify-content:center;
     padding:14px;
@@ -209,7 +208,6 @@ label{
     -webkit-backdrop-filter:blur(4px);
 }
 
-.modal.show,.modal.open{display:flex}
 
 .modal-content{
     width:min(100%,620px);
@@ -354,6 +352,9 @@ body .container > nav button.active{
     display:block;
 }
 
+
+.hidden{display:none !important;}
+.modal:not(.hidden){display:flex;}
 </style>
 </head>
 
@@ -364,9 +365,9 @@ body .container > nav button.active{
 <h1>🏦 Private Fund</h1>
 
 <nav>
-    <button id="navFund" class="active" onclick="showPage('fund')">🏦 Фонд</button>
-    <button id="navProjects" onclick="showPage('projects')">📊 Проекты</button>
-    <button id="navHistory" onclick="showPage('history')">📜 История</button>
+    <button type="button" id="navFund" class="active" onclick="showPage('fund')">🏦 Фонд</button>
+    <button type="button" id="navProjects" onclick="showPage('projects')">📊 Проекты</button>
+    <button type="button" id="navHistory" onclick="showPage('history')">📜 История</button>
 </nav>
 
 <!-- ФОНД -->
@@ -378,7 +379,7 @@ body .container > nav button.active{
                 <h2>💰 Фонд</h2>
                 <div class="small">Текущие средства</div>
             </div>
-            <button onclick="openDeposit()">＋ Поступление</button>
+            <button type="button" onclick="openDeposit()">＋ Поступление</button>
         </div>
 
         <div id="fundCoins"></div>
@@ -407,7 +408,7 @@ body .container > nav button.active{
                 <h2>📊 Проекты</h2>
                 <div class="small">Распределение фонда</div>
             </div>
-            <button onclick="openProject()">＋ Проект</button>
+            <button type="button" onclick="openProject()">＋ Проект</button>
         </div>
 
         <div id="percentTotal"></div>
@@ -428,7 +429,7 @@ body .container > nav button.active{
 </div>
 
 <!-- MODAL -->
-<div id="modal" class="modal hidden">
+<div id="modal" class="modal hidden" style="display:none">
     <div class="modal-box">
         <button class="close" onclick="closeModal()">✕</button>
         <div id="modalContent"></div>
