@@ -456,6 +456,33 @@ hr{
 }
 </style>
 
+
+<style>
+/* v14: exit action */
+.project-card button[onclick^="openProjectExit"]{
+    background:#34303b !important;
+    border-color:#55485f !important;
+    color:#e8d9f2 !important;
+}
+</style>
+
+
+<style>
+#closeRedistributionFields{
+    margin-top:12px;
+    padding:12px;
+    border:1px solid #3a4451;
+    border-radius:13px;
+    background:#1b2028;
+}
+#closeRedistributionFields label{
+    margin-top:8px;
+}
+#closeRedistributionFields label:first-child{
+    margin-top:0;
+}
+</style>
+
 </head>
 
 <body>
@@ -1369,6 +1396,10 @@ function renderProjects() {
                     </button>
                 `
             }
+
+            <button class="secondary" onclick="openProjectExit('${p.id}')">
+                🚪 Выход / закрытие проекта
+            </button>
 
             <button class="secondary" onclick="openProject('${p.id}')">
                 ✏️ Изменить
@@ -2909,6 +2940,382 @@ function renderHistory() {
 /* =========================
    УДАЛЕНИЕ ПРОЕКТА
 ========================= */
+
+
+/* =========================
+   ВЫХОД / ЗАКРЫТИЕ ПРОЕКТА
+   ========================= */
+
+
+function openProjectExit(id) {
+
+    const p = getProject(id);
+    if (!p) return;
+
+    const coin = getCoin(p.coinId);
+    const baseName = coin ? coin.name : "монета фонда";
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>🚪 Выход из проекта</h2>
+
+        <div class="status warning">
+            Проект: <b>${escapeHtml(p.name)}</b><br>
+            Доля распределения: <b>${money(p.percent)}%</b><br>
+            Инвестировано:
+            <b>${money(p.invested)} ${escapeHtml(baseName)}</b>
+            ${
+                p.assetName
+                ? `<br><b>${money(p.assetInvested)} ${escapeHtml(p.assetName)}</b>`
+                : ""
+            }
+        </div>
+
+        <label>Какую монету вернули из проекта?</label>
+        <select id="projectExitCoin">
+            ${data.coins.map(c => `
+                <option value="${c.id}" ${c.id === p.coinId ? "selected" : ""}>
+                    ${escapeHtml(c.name)}
+                </option>
+            `).join("")}
+        </select>
+
+        <label>Сумма, которую получили обратно</label>
+        <input id="projectExitGross" type="number" step="any" min="0"
+               placeholder="Например: 100">
+
+        <label>Комиссия при выходе</label>
+        <input id="projectExitFee" type="number" step="any" min="0"
+               value="0" placeholder="Например: 2">
+
+        <label style="margin-top:14px;display:flex;align-items:center;gap:9px">
+            <input id="projectExitClose" type="checkbox"
+                   style="width:auto;min-height:auto;margin:0">
+            Полностью закрыть проект
+        </label>
+
+        <div class="small">
+            Если проект закрывается, его процент нужно сразу передать
+            оставшимся проектам. Возвращённые средства будут распределены
+            уже по новым процентам.
+        </div>
+
+        <button class="green" onclick="prepareProjectExit('${id}')">
+            Продолжить
+        </button>
+
+        <button class="secondary" onclick="closeModal()">Отмена</button>
+    `;
+
+    openModal();
+}
+
+function prepareProjectExit(id) {
+
+    const p = getProject(id);
+    if (!p) return;
+
+    const exitCoinId = document.getElementById("projectExitCoin").value;
+    const gross = Number(document.getElementById("projectExitGross").value);
+    const fee = Number(document.getElementById("projectExitFee").value || 0);
+    const closeProject = document.getElementById("projectExitClose").checked;
+
+    if (!Number.isFinite(gross) || gross < 0) {
+        alert("Укажи корректную сумму возврата.");
+        return;
+    }
+
+    if (!Number.isFinite(fee) || fee < 0 || fee > gross) {
+        alert("Проверь комиссию. Она должна быть от 0 до суммы возврата.");
+        return;
+    }
+
+    if (!getCoin(exitCoinId)) {
+        alert("Монета возврата не найдена.");
+        return;
+    }
+
+    const payload = { id, exitCoinId, gross, fee, closeProject };
+
+    if (!closeProject) {
+        executeProjectExit(payload, null);
+        return;
+    }
+
+    const remaining = data.projects.filter(x =>
+        x.id !== id && x.coinId === p.coinId
+    );
+
+    if (!remaining.length) {
+        /*
+           Last project for this base coin:
+           no redistribution is possible. Its percentage simply disappears
+           because there are no active projects left for that coin.
+        */
+        if (!confirm(
+            "Это последний проект для этой монеты.\n\n" +
+            "После закрытия активных проектов для распределения не останется. Продолжить?"
+        )) return;
+
+        executeProjectExit(payload, {});
+        return;
+    }
+
+    openCloseRedistribution(payload);
+}
+
+function openCloseRedistribution(payload) {
+
+    const p = getProject(payload.id);
+    if (!p) return;
+
+    const remaining = data.projects.filter(x =>
+        x.id !== p.id && x.coinId === p.coinId
+    );
+
+    const oldRemainingTotal = remaining.reduce(
+        (s, x) => s + Number(x.percent || 0), 0
+    );
+
+    const released = Number(p.percent || 0);
+
+    /*
+       Suggested automatic redistribution:
+       scale the remaining projects proportionally so they total 100%.
+       If their old total is zero, split evenly.
+    */
+    const suggested = {};
+    remaining.forEach((x, index) => {
+        if (oldRemainingTotal > 0) {
+            suggested[x.id] = Number(x.percent || 0) / oldRemainingTotal * 100;
+        } else {
+            suggested[x.id] = 100 / remaining.length;
+        }
+    });
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>📊 Перераспределение доли</h2>
+
+        <div class="status warning">
+            Закрывается <b>${escapeHtml(p.name)}</b>.<br>
+            Освобождается <b>${money(released)}%</b>.<br>
+            После закрытия сумма долей оставшихся проектов должна быть <b>100%</b>.
+        </div>
+
+        <button onclick="fillCloseRedistributionAuto('${p.id}')">
+            ⚡ Распределить пропорционально
+        </button>
+
+        <div id="closeRedistributionFields">
+            ${remaining.map(x => `
+                <label>${escapeHtml(x.name)}</label>
+                <input
+                    class="close-redist-input"
+                    data-project-id="${x.id}"
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100"
+                    value="${suggested[x.id].toFixed(6)}"
+                    oninput="updateCloseRedistributionTotal()">
+            `).join("")}
+        </div>
+
+        <div id="closeRedistributionTotal" class="status"></div>
+
+        <button class="green" onclick='confirmCloseRedistribution(${JSON.stringify(payload)})'>
+            ✓ Закрыть и распределить
+        </button>
+
+        <button class="secondary" onclick="openProjectExit('${p.id}')">
+            ← Назад
+        </button>
+    `;
+
+    window._closeRedistributionProjectId = p.id;
+    openModal();
+    updateCloseRedistributionTotal();
+}
+
+function fillCloseRedistributionAuto(closingId) {
+
+    const p = getProject(closingId);
+    if (!p) return;
+
+    const remaining = data.projects.filter(x =>
+        x.id !== p.id && x.coinId === p.coinId
+    );
+
+    const total = remaining.reduce(
+        (s, x) => s + Number(x.percent || 0), 0
+    );
+
+    document.querySelectorAll(".close-redist-input").forEach(input => {
+        const project = getProject(input.dataset.projectId);
+        let value = 0;
+
+        if (total > 0) {
+            value = Number(project.percent || 0) / total * 100;
+        } else {
+            value = 100 / remaining.length;
+        }
+
+        input.value = value.toFixed(6);
+    });
+
+    updateCloseRedistributionTotal();
+}
+
+function updateCloseRedistributionTotal() {
+
+    const inputs = [...document.querySelectorAll(".close-redist-input")];
+    const total = inputs.reduce(
+        (s, input) => s + Number(input.value || 0), 0
+    );
+
+    const box = document.getElementById("closeRedistributionTotal");
+    if (!box) return;
+
+    const ok = Math.abs(total - 100) < 0.0001;
+
+    box.className = `status ${ok ? "success" : "error"}`;
+    box.innerHTML =
+        `Итого: <b>${money(total)}%</b>` +
+        (ok ? " — корректно" : ` — должно быть 100%`);
+}
+
+function confirmCloseRedistribution(payload) {
+
+    const inputs = [...document.querySelectorAll(".close-redist-input")];
+    const redistribution = {};
+    let total = 0;
+
+    for (const input of inputs) {
+        const value = Number(input.value);
+
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+            alert("Проверь проценты проектов.");
+            return;
+        }
+
+        redistribution[input.dataset.projectId] = value;
+        total += value;
+    }
+
+    if (Math.abs(total - 100) >= 0.0001) {
+        alert("Сумма процентов должна быть ровно 100%.");
+        return;
+    }
+
+    executeProjectExit(payload, redistribution);
+}
+
+function executeProjectExit(payload, redistribution) {
+
+    const p = getProject(payload.id);
+    if (!p) return;
+
+    const exitCoin = getCoin(payload.exitCoinId);
+    if (!exitCoin) return;
+
+    const gross = Number(payload.gross || 0);
+    const fee = Number(payload.fee || 0);
+    const net = gross - fee;
+
+    const oldBaseInvested = Number(p.invested || 0);
+    const oldAssetInvested = Number(p.assetInvested || 0);
+
+    /*
+       Ordinary exit:
+       return net amount to liquid fund and clear investment values.
+    */
+    if (!payload.closeProject) {
+        exitCoin.balance = Number(exitCoin.balance || 0) + net;
+        p.invested = 0;
+        p.assetInvested = 0;
+
+        addHistory(
+            "project",
+            `Выход из проекта ${p.name}: получено ${money(gross)} ${exitCoin.name}, ` +
+            `комиссия ${money(fee)}, в фонд возвращено ${money(net)} ${exitCoin.name}.`
+        );
+
+        save();
+        closeModal();
+        render();
+        return;
+    }
+
+    /*
+       Closing:
+       1. Apply new percentages to the remaining projects.
+       2. Remove the closed project.
+       3. The returned NET money is treated as newly distributable capital.
+          If the returned coin is the project's base coin, allocate it to
+          remaining projects according to the NEW percentages.
+          The global liquid balance remains unchanged for allocated capital,
+          matching the app's normal deposit/allocation model.
+       4. If returned in another coin, keep it liquid in the fund because
+          projects of this base coin cannot safely receive it automatically.
+    */
+    if (redistribution) {
+        Object.entries(redistribution).forEach(([projectId, percent]) => {
+            const target = getProject(projectId);
+            if (target) target.percent = Number(percent);
+        });
+    }
+
+    const baseCoinId = p.coinId;
+    const closingName = p.name;
+    const releasedPercent = Number(p.percent || 0);
+
+    data.projects = data.projects.filter(x => x.id !== p.id);
+
+    if (payload.exitCoinId === baseCoinId) {
+
+        exitCoin.balance = Number(exitCoin.balance || 0) + net;
+
+        const remaining = data.projects.filter(x => x.coinId === baseCoinId);
+
+        remaining.forEach(target => {
+            const allocation = net * Number(target.percent || 0) / 100;
+            target.available = Number(target.available || 0) + allocation;
+        });
+
+        addHistory(
+            "project",
+            `Закрыт проект ${closingName}. Освободилось ${money(releasedPercent)}%. ` +
+            `Возврат ${money(gross)} ${exitCoin.name}, комиссия ${money(fee)}, ` +
+            `чистыми ${money(net)} ${exitCoin.name}. Средства распределены по оставшимся проектам по новым процентам.`
+        );
+
+    } else {
+
+        exitCoin.balance = Number(exitCoin.balance || 0) + net;
+
+        addHistory(
+            "project",
+            `Закрыт проект ${closingName}. Освободилось ${money(releasedPercent)}%. ` +
+            `Получено ${money(net)} ${exitCoin.name} после комиссии. ` +
+            `Монета отличается от базовой монеты проекта, поэтому средства оставлены в фонде без автоматического распределения.`
+        );
+    }
+
+    if (typeof addOperation === "function") {
+        addOperation({
+            id: Date.now().toString(),
+            projectId: payload.id,
+            type: "project_close",
+            text:
+                `Закрытие проекта: ${money(gross)} ${exitCoin.name}, ` +
+                `комиссия ${money(fee)}, чистыми ${money(net)}`,
+            date: dateNow()
+        });
+    }
+
+    save();
+    closeModal();
+    render();
+}
 
 function deleteProject(id) {
 
