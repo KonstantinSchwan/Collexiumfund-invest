@@ -1005,7 +1005,7 @@ function renderProjects() {
             }
 
             <button onclick="openExchangeToAsset('${p.id}')">
-                🔄 Обменять ${coin ? escapeHtml(coin.name) : ""} → монету проекта
+                🔄 Обменять монету
             </button>
 
             ${
@@ -1374,110 +1374,269 @@ function escapeJs(text) {
 function openExchangeToAsset(id) {
 
     const p = getProject(id);
-    const coin = getCoin(p.coinId);
+    const baseCoin = getCoin(p.coinId);
+
+    // Источники обмена: монета фонда проекта + текущий актив проекта,
+    // если он есть и доступен.
+    const sources = [];
+
+    if (baseCoin && Number(p.available) > 0.00000001) {
+        sources.push({
+            key: "base",
+            name: baseCoin.name,
+            amount: Number(p.available)
+        });
+    }
+
+    if (p.assetName && Number(p.assetAvailable) > 0.00000001) {
+        sources.push({
+            key: "asset",
+            name: p.assetName,
+            amount: Number(p.assetAvailable)
+        });
+    }
+
+    if (!sources.length) {
+        alert("В проекте сейчас нет доступных монет для обмена.");
+        return;
+    }
+
+    // Список получаемых монет берём из всех уже существующих монет приложения.
+    // Текущий актив проекта тоже добавляем в список, если его ещё нет в data.coins.
+    const targetNames = [...new Set([
+        ...data.coins.map(c => c.name),
+        ...(p.assetName ? [p.assetName] : [])
+    ].filter(Boolean))];
+
+    const sourceOptions = sources.map(s => `
+        <option value="${s.key}">
+            ${escapeHtml(s.name)} — доступно ${money(s.amount)}
+        </option>
+    `).join("");
+
+    const targetOptions = targetNames.map(name => `
+        <option value="${escapeAttr(name)}">
+            ${escapeHtml(name)}
+        </option>
+    `).join("");
 
     document.getElementById("modalContent").innerHTML = `
-        <h2>🔄 Обмен для проекта</h2>
+        <h2>🔄 Обмен монет проекта</h2>
 
         <p>
-            <b>${escapeHtml(p.name)}</b><br>
-            Доступно от фонда:
-            <b>${money(p.available)} ${escapeHtml(coin.name)}</b>
+            <b>${escapeHtml(p.name)}</b>
         </p>
 
-        <label>Отдал (${escapeHtml(coin.name)})</label>
+        <label>С какой монеты меняем?</label>
+        <select id="exchangeFromCoin" onchange="updateExchangeAvailable('${id}')">
+            ${sourceOptions}
+        </select>
+
+        <div id="exchangeAvailableInfo" class="status"></div>
+
+        <label>Сколько отдаём?</label>
         <input id="exchangeFromAmount"
             type="number"
             step="any"
             min="0"
-            max="${p.available}"
-            placeholder="Например: 500">
+            placeholder="Например: 100">
 
-        <label>Какую монету получил?</label>
-        <input id="exchangeAssetName"
-            value="${p.assetName ? escapeAttr(p.assetName) : ""}"
-            placeholder="Например: BYA, USDT, BTC">
+        <label>На какую монету меняем?</label>
+        <select id="exchangeToCoin">
+            ${targetOptions}
+        </select>
 
-        <div class="small">
-            Обязательно укажи тикер монеты, которую получил при обмене.
-        </div>
-
-        <label>Сколько этой монеты получил?</label>
+        <label>Сколько получили?</label>
         <input id="exchangeAssetAmount"
             type="number"
             step="any"
             min="0"
-            placeholder="Например: 20">
+            placeholder="Например: 7.518433">
 
         <div class="small">
-            Курс не рассчитывается автоматически. Укажи фактические суммы обмена.
+            Выбирай обе монеты из списка и указывай фактические суммы обмена.
         </div>
 
-        <button class="green" onclick="exchangeToAsset('${id}')">
+        <button class="green" onclick="exchangeProjectCoins('${id}')">
             💾 Записать обмен
         </button>
     `;
 
     openModal();
+    updateExchangeAvailable(id);
+}
+
+
+function updateExchangeAvailable(id) {
+
+    const p = getProject(id);
+    const baseCoin = getCoin(p.coinId);
+    const select = document.getElementById("exchangeFromCoin");
+    const box = document.getElementById("exchangeAvailableInfo");
+    const amountInput = document.getElementById("exchangeFromAmount");
+
+    if (!select || !box) return;
+
+    let name = "";
+    let amount = 0;
+
+    if (select.value === "base") {
+        name = baseCoin ? baseCoin.name : "";
+        amount = Number(p.available || 0);
+    } else {
+        name = p.assetName || "";
+        amount = Number(p.assetAvailable || 0);
+    }
+
+    box.innerHTML = `Доступно для обмена: <b>${money(amount)} ${escapeHtml(name)}</b>`;
+
+    if (amountInput) {
+        amountInput.max = amount;
+    }
 }
 
 
 function exchangeToAsset(id) {
+    // Совместимость со старыми onclick, если где-то осталась ссылка.
+    exchangeProjectCoins(id);
+}
+
+
+function exchangeProjectCoins(id) {
 
     const p = getProject(id);
-    const coin = getCoin(p.coinId);
+    const baseCoin = getCoin(p.coinId);
 
+    const fromType = document.getElementById("exchangeFromCoin").value;
     const fromAmount = Number(document.getElementById("exchangeFromAmount").value);
-    const assetName = document.getElementById("exchangeAssetName").value.trim().toUpperCase();
-    const assetAmount = Number(document.getElementById("exchangeAssetAmount").value);
+    const toCoinName = document.getElementById("exchangeToCoin").value.trim().toUpperCase();
+    const toAmount = Number(document.getElementById("exchangeAssetAmount").value);
 
-    if (!fromAmount || fromAmount <= 0 || !assetName || !assetAmount || assetAmount <= 0) {
-        alert("Укажи: сколько отдал, КАКУЮ монету получил и сколько этой монеты получил.");
+    let fromName = "";
+    let available = 0;
+
+    if (fromType === "base") {
+        fromName = baseCoin.name;
+        available = Number(p.available || 0);
+    } else {
+        fromName = p.assetName || "";
+        available = Number(p.assetAvailable || 0);
+    }
+
+    if (!fromAmount || fromAmount <= 0 || !toCoinName || !toAmount || toAmount <= 0) {
+        alert("Выбери обе монеты и укажи обе суммы обмена.");
         return;
     }
 
-    if (fromAmount > p.available + 0.00000001) {
-        alert(`Недостаточно доступных ${coin.name} в этом проекте.`);
+    if (fromName.toUpperCase() === toCoinName) {
+        alert("Монета, которую отдаёшь, и монета, которую получаешь, должны отличаться.");
         return;
     }
 
-    if (p.assetName && p.assetName.toUpperCase() !== assetName &&
-        (Number(p.assetAvailable) > 0.00000001 || Number(p.assetInvested) > 0.00000001)) {
-        alert(
-            `В проекте уже используется ${p.assetName}.\n\n` +
-            `Сначала нужно вывести/обменять остаток этой монеты, прежде чем менять актив проекта.`
-        );
+    if (fromAmount > available + 0.00000001) {
+        alert(`Недостаточно ${fromName}. Доступно: ${money(available)} ${fromName}.`);
         return;
     }
 
-    p.assetName = assetName;
-
-    // AXM/исходная монета реально уходит из фонда при обмене.
-    p.available -= fromAmount;
-    coin.balance -= fromAmount;
-
-    // Полученная монета становится реальным активом фонда
-    // и одновременно учитывается внутри конкретного проекта.
+    // Получаем/создаём глобальную запись целевой монеты.
     let receivedCoin = data.coins.find(
-        c => c.name.toLowerCase() === assetName.toLowerCase()
+        c => c.name.toLowerCase() === toCoinName.toLowerCase()
     );
 
     if (!receivedCoin) {
         receivedCoin = {
             id: (Date.now() + 1).toString(),
-            name: assetName,
+            name: toCoinName,
             balance: 0
         };
         data.coins.push(receivedCoin);
     }
 
-    receivedCoin.balance += assetAmount;
-    p.assetAvailable = Number(p.assetAvailable || 0) + assetAmount;
+    if (fromType === "base") {
+
+        // Меняем выделенную проекту базовую монету (например AXM) на актив.
+        p.available -= fromAmount;
+        baseCoin.balance -= fromAmount;
+
+        // Если в проекте уже есть другой актив с остатком, нельзя смешивать
+        // две разные проектные монеты в одном assetAvailable.
+        if (
+            p.assetName &&
+            p.assetName.toUpperCase() !== toCoinName &&
+            (Number(p.assetAvailable) > 0.00000001 || Number(p.assetInvested) > 0.00000001)
+        ) {
+            // Откатываем списание до выхода.
+            p.available += fromAmount;
+            baseCoin.balance += fromAmount;
+
+            alert(
+                `В проекте уже используется ${p.assetName}.\n\n` +
+                `Сначала обменяй доступный остаток ${p.assetName} назад или в другую монету.`
+            );
+            return;
+        }
+
+        p.assetName = toCoinName;
+        p.assetAvailable = Number(p.assetAvailable || 0) + toAmount;
+        receivedCoin.balance += toAmount;
+
+    } else {
+
+        // Меняем текущий актив проекта назад, например CLX → AXM,
+        // либо на другую выбранную монету.
+        const oldAssetName = p.assetName;
+        const oldAssetCoin = data.coins.find(
+            c => c.name.toLowerCase() === oldAssetName.toLowerCase()
+        );
+
+        p.assetAvailable -= fromAmount;
+
+        if (oldAssetCoin) {
+            oldAssetCoin.balance -= fromAmount;
+            if (oldAssetCoin.balance < 0.00000001) oldAssetCoin.balance = 0;
+        }
+
+        receivedCoin.balance += toAmount;
+
+        if (baseCoin && toCoinName === baseCoin.name.toUpperCase()) {
+            // Обмен назад в базовую монету проекта:
+            // она снова становится доступной для инвестирования проекта.
+            p.available = Number(p.available || 0) + toAmount;
+
+            // Если весь свободный актив обменян назад и ничего не инвестировано,
+            // очищаем название проектного актива.
+            if (
+                Number(p.assetAvailable) <= 0.00000001 &&
+                Number(p.assetInvested) <= 0.00000001
+            ) {
+                p.assetAvailable = 0;
+                p.assetName = "";
+            }
+        } else {
+            // Обмен актива на другую проектную монету.
+            // Пока поддерживаем один свободный актив проекта за раз,
+            // поэтому менять можно весь доступный остаток.
+            if (Number(p.assetAvailable) > 0.00000001) {
+                // Откат.
+                p.assetAvailable += fromAmount;
+                if (oldAssetCoin) oldAssetCoin.balance += fromAmount;
+                receivedCoin.balance -= toAmount;
+
+                alert(
+                    `Чтобы заменить ${oldAssetName} на ${toCoinName}, ` +
+                    `обмени весь доступный остаток ${oldAssetName}: ${money(p.assetAvailable)}.`
+                );
+                return;
+            }
+
+            p.assetName = toCoinName;
+            p.assetAvailable = toAmount;
+        }
+    }
 
     addHistory(
         "exchange",
-        `${p.name}: обмен ${money(fromAmount)} ${coin.name} → ${money(assetAmount)} ${assetName}. ` +
-        `Баланс фонда: -${money(fromAmount)} ${coin.name}, +${money(assetAmount)} ${assetName}`
+        `${p.name}: обмен ${money(fromAmount)} ${fromName} → ${money(toAmount)} ${toCoinName}`
     );
 
     save();
