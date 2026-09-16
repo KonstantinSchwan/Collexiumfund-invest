@@ -286,6 +286,28 @@ function save() {
 }
 
 /* =========================
+   ОДНОРАЗОВОЕ УДАЛЕНИЕ СТАРЫХ 1000 AXM
+   Удаляет старый баланс 1000 AXM, который был
+   добавлен до появления журнала поступлений.
+========================= */
+if (!localStorage.getItem("old1000Removed")) {
+    const axm = data.coins.find(c => c.name.toLowerCase() === "axm");
+    if (axm && Number(axm.balance) === 1000) {
+        axm.balance = 0;
+
+        // Убираем также старые доступные средства проектов AXM.
+        data.projects.forEach(p => {
+            if (p.coinId === axm.id) {
+                p.available = 0;
+            }
+        });
+
+        localStorage.setItem("old1000Removed", "1");
+        save();
+    }
+}
+
+/* =========================
    TELEGRAM
 ========================= */
 
