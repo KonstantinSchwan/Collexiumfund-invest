@@ -1044,6 +1044,11 @@ function openProject(id = null) {
             `
         }
     `;
+
+    // ВАЖНО: раньше содержимое модального окна создавалось,
+    // но само окно не открывалось. Поэтому кнопки "＋ Проект"
+    // и "✏️ Изменить" визуально нажимались, но ничего не происходило.
+    openModal();
 }
 
 function saveProject(id) {
@@ -1052,42 +1057,46 @@ function saveProject(id) {
     const coinId = document.getElementById("projectCoin").value;
     const percent = Number(document.getElementById("projectPercent").value);
 
-    if (!name || !coinId || percent < 0) {
-        alert("Заполни все поля.");
+    if (!name || !coinId || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+        alert("Заполни все поля. Процент должен быть от 0 до 100.");
         return;
     }
 
-    let total = 0;
+    const otherProjects = data.projects.filter(
+        p => p.coinId === coinId && p.id !== id
+    );
 
-    data.projects.forEach(p => {
+    const otherTotal = otherProjects.reduce(
+        (sum, p) => sum + Number(p.percent),
+        0
+    );
 
-        if (p.coinId === coinId && p.id !== id) {
-            total += Number(p.percent);
-        }
-
-    });
-
-    total += percent;
+    const total = otherTotal + percent;
 
     /*
-       Теперь можно нормально создавать проекты по очереди:
-       например сначала 10%, потом ещё 20%.
-       Последний проект можно сделать на оставшиеся 70%.
-       Нельзя сохранить проект, если сумма превышает 100%.
+       Если после создания/изменения проекта сумма становится больше 100%,
+       не блокируем действие. Открываем экран перераспределения, где
+       пользователь сам выбирает, у каких проектов уменьшить процент.
     */
     if (total > 100.000001) {
-
-        alert(
-            `Для монеты ${getCoin(coinId).name} нельзя превысить 100%.\n\n` +
-            `Сейчас получится: ${money(total)}%`
-        );
-
+        openProjectRedistribution(id, name, coinId, percent);
         return;
     }
+
+    commitProject(id, name, coinId, percent);
+}
+
+
+function commitProject(id, name, coinId, percent) {
 
     if (id) {
 
         const project = getProject(id);
+
+        if (!project) {
+            alert("Проект не найден.");
+            return;
+        }
 
         project.name = name;
         project.coinId = coinId;
@@ -1114,6 +1123,188 @@ function saveProject(id) {
     closeModal();
     render();
 }
+
+
+function openProjectRedistribution(id, name, coinId, percent) {
+
+    const coin = getCoin(coinId);
+
+    const otherProjects = data.projects.filter(
+        p => p.coinId === coinId && p.id !== id
+    );
+
+    const otherTotal = otherProjects.reduce(
+        (sum, p) => sum + Number(p.percent),
+        0
+    );
+
+    const total = otherTotal + percent;
+    const excess = total - 100;
+
+    const rows = otherProjects.map(p => `
+        <div class="coin-card">
+            <div class="row">
+                <div>
+                    <b>${escapeHtml(p.name)}</b>
+                    <div class="small">Сейчас: ${money(p.percent)}%</div>
+                </div>
+                <div style="width:130px">
+                    <label>Новый %</label>
+                    <input
+                        class="redistributePercent"
+                        data-project-id="${p.id}"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value="${p.percent}"
+                        oninput="updateRedistributionTotal('${id || ""}', ${percent})">
+                </div>
+            </div>
+        </div>
+    `).join("");
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>⚖️ Перераспределить проценты</h2>
+
+        <div class="status warning">
+            ${coin ? escapeHtml(coin.name) : "Монета"} уже распределена.
+            После добавления получится <b>${money(total)}%</b>.<br>
+            Нужно уменьшить другие проекты минимум на
+            <b>${money(excess)}%</b>, чтобы итог снова был ровно 100%.
+        </div>
+
+        <div style="margin-top:14px">
+            <b>Новый / изменяемый проект</b>
+            <div class="coin-card">
+                <div class="row">
+                    <span>${escapeHtml(name)}</span>
+                    <b>${money(percent)}%</b>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top:14px">
+            <b>Выбери, где уменьшить процент:</b>
+            <div class="small">
+                Можно уменьшить один проект или сразу несколько.
+            </div>
+            ${rows}
+        </div>
+
+        <div id="redistributionTotal" class="status error"></div>
+
+        <button class="green"
+            onclick="applyProjectRedistribution('${id || ""}', '${escapeJs(name)}', '${coinId}', ${percent})">
+            💾 Применить и сохранить
+        </button>
+
+        <button class="secondary"
+            onclick="openProject('${id || ""}')">
+            ← Назад
+        </button>
+    `;
+
+    updateRedistributionTotal(id || "", percent);
+}
+
+
+function updateRedistributionTotal(id, newProjectPercent) {
+
+    const inputs = [...document.querySelectorAll(".redistributePercent")];
+
+    const otherTotal = inputs.reduce(
+        (sum, input) => sum + Number(input.value || 0),
+        0
+    );
+
+    const total = otherTotal + Number(newProjectPercent);
+
+    const box = document.getElementById("redistributionTotal");
+
+    if (!box) return;
+
+    if (Math.abs(total - 100) <= 0.000001) {
+        box.className = "status success";
+        box.innerHTML = `Итого: <b>${money(total)}%</b> — можно сохранить.`;
+    } else if (total > 100) {
+        box.className = "status error";
+        box.innerHTML =
+            `Итого: <b>${money(total)}%</b>. ` +
+            `Нужно уменьшить ещё на <b>${money(total - 100)}%</b>.`;
+    } else {
+        box.className = "status warning";
+        box.innerHTML =
+            `Итого: <b>${money(total)}%</b>. ` +
+            `Нужно добавить ещё <b>${money(100 - total)}%</b>.`;
+    }
+}
+
+
+function applyProjectRedistribution(id, name, coinId, newProjectPercent) {
+
+    const inputs = [...document.querySelectorAll(".redistributePercent")];
+
+    const changes = [];
+
+    for (const input of inputs) {
+
+        const value = Number(input.value);
+
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+            alert("Все проценты должны быть от 0 до 100.");
+            return;
+        }
+
+        changes.push({
+            projectId: input.dataset.projectId,
+            percent: value
+        });
+    }
+
+    const total =
+        changes.reduce((sum, x) => sum + x.percent, 0) +
+        Number(newProjectPercent);
+
+    if (Math.abs(total - 100) > 0.000001) {
+        alert(
+            `Сумма должна быть ровно 100%.\n\n` +
+            `Сейчас: ${money(total)}%`
+        );
+        return;
+    }
+
+    /*
+       Меняем только проценты будущих распределений.
+       Уже сохранённые поступления сохраняют свои старые allocations.
+    */
+    changes.forEach(change => {
+        const project = getProject(change.projectId);
+        if (project) {
+            project.percent = change.percent;
+        }
+    });
+
+    commitProject(
+        id,
+        name,
+        coinId,
+        Number(newProjectPercent)
+    );
+}
+
+
+/*
+   Экранируем строку для безопасной вставки в JS-аргумент onclick.
+*/
+function escapeJs(text) {
+    return String(text)
+        .replaceAll("\\", "\\\\")
+        .replaceAll("'", "\\'")
+        .replaceAll("\n", "\\n")
+        .replaceAll("\r", "\\r");
+}
+
 
 /* =========================
    ИНВЕСТИЦИЯ
