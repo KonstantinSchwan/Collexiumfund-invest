@@ -8,354 +8,269 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
+* { box-sizing: border-box; }
 
-:root{
-    --bg:#f3f5f8;
-    --surface:#ffffff;
-    --surface-soft:#f8fafc;
-    --border:#e1e6ec;
-    --text:#18212b;
-    --muted:#75808d;
-    --accent:#4f6df5;
-    --accent-soft:#eef1ff;
-    --green:#19a974;
-    --green-soft:#eaf8f2;
-    --red:#dc4c5b;
-    --red-soft:#fff0f2;
-    --orange:#c98722;
-    --orange-soft:#fff7e8;
-    --shadow:0 5px 18px rgba(25,35,50,.055);
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #17202a;
 }
 
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.container {
+    max-width: 700px;
+    margin: auto;
+    padding: 16px;
+}
 
-html,body{
-    margin:0;
-    min-height:100%;
-    background:var(--bg);
-    color:var(--text);
-    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+h1 { margin: 5px 0 18px; font-size: 25px; }
+h2 { font-size: 20px; margin-top: 0; }
+
+.card {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+.coin-card, .project-card {
+    border: 1px solid #e3e7eb;
+    border-radius: 12px;
+    padding: 13px;
+    margin-top: 10px;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.amount { font-size: 22px; font-weight: bold; }
+.small { font-size: 13px; color: #6b7280; }
+
+button {
+    border: 0;
+    border-radius: 11px;
+    padding: 11px 15px;
+    font-size: 15px;
+    cursor: pointer;
+    background: #2481cc;
+    color: white;
+    margin-top: 8px;
+}
+
+button.secondary { background: #e9eef3; color: #17202a; }
+button.danger { background: #e55353; }
+button.green { background: #27a66f; }
+
+input, select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccd3da;
+    border-radius: 10px;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    background: white;
+}
+
+label { font-size: 13px; color: #5b6470; }
+
+nav {
+    display: flex;
+    gap: 5px;
+    background: white;
+    padding: 6px;
+    border-radius: 14px;
+    margin-bottom: 15px;
+    position: sticky;
+    top: 5px;
+    z-index: 10;
+}
+
+nav button {
+    flex: 1;
+    margin: 0;
+    background: transparent;
+    color: #555;
+    padding: 10px 5px;
+}
+
+nav button.active { background: #2481cc; color: white; }
+
+.hidden { display: none !important; }
+
+.total { font-size: 14px; margin-top: 5px; }
+
+.status {
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: #eef5ff;
+    color: #2471b8;
+    display: inline-block;
+    font-size: 13px;
+    margin-top: 8px;
+}
+
+.warning { background: #fff4d6; color: #8a6200; }
+.success { background: #e5f8ef; color: #168553; }
+.error { background: #ffe8e8; color: #bd3030; }
+
+hr {
+    border: 0;
+    border-top: 1px solid #eee;
+    margin: 15px 0;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-box {
+    background: white;
+    width: 100%;
+    max-width: 700px;
+    padding: 20px;
+    border-radius: 20px 20px 0 0;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.close { float: right; background: #eee; color: #333; margin: 0; }
+
+.empty { text-align: center; color: #777; padding: 25px 10px; }
+
+.history-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.plus { color: #15945c; }
+.minus { color: #c93636; }
+
+.deposit-item {
+    border: 1px solid #e3e7eb;
+    border-radius: 12px;
+    padding: 13px;
+    margin-top: 10px;
+}
+
+.deposit-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.deposit-actions button {
+    margin-top: 8px;
+}
+
+.danger-text {
+    color: #bd3030;
+    font-size: 13px;
+    margin-top: 8px;
+}
+</style>
+
+<style>
+/* v12 visual refresh — logic/navigation/modal code remains exactly from v7 */
+:root{
+    --v12-bg:#eef2f6;
+    --v12-card:#ffffff;
+    --v12-border:#dde4eb;
+    --v12-text:#17202a;
+    --v12-muted:#6f7b87;
+    --v12-blue:#3977d8;
 }
 
 body{
-    padding-bottom:86px;
-    background:
-        radial-gradient(circle at 50% -180px,rgba(79,109,245,.09),transparent 430px),
-        var(--bg);
+    background:linear-gradient(180deg,#edf3fb 0,#f4f6f8 240px,#f4f6f8 100%);
+    color:var(--v12-text);
 }
 
 .container{
-    width:min(100%,760px);
-    margin:0 auto;
-    padding:22px 15px 30px;
+    max-width:700px;
+    padding:16px;
 }
 
 h1{
-    margin:6px 0 20px;
-    font-size:27px;
-    line-height:1.15;
-    letter-spacing:-.65px;
+    font-size:26px;
+    letter-spacing:-.4px;
+    margin:7px 0 18px;
 }
 
-h2{
-    margin:0 0 15px;
-    font-size:20px;
-    letter-spacing:-.3px;
+nav{
+    border:1px solid var(--v12-border);
+    box-shadow:0 4px 14px rgba(30,50,75,.07);
 }
 
-h3{margin:0 0 8px;font-size:16px}
-
-.small{
-    color:var(--muted);
-    font-size:12.5px;
-    line-height:1.45;
+nav button{
+    border-radius:10px;
+    font-weight:600;
 }
 
-.amount{
-    margin-top:3px;
-    font-size:27px;
-    line-height:1.15;
-    font-weight:800;
-    letter-spacing:-.55px;
-    font-variant-numeric:tabular-nums;
+nav button.active{
+    background:var(--v12-blue);
+    box-shadow:0 3px 8px rgba(57,119,216,.20);
 }
 
 .card{
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:17px;
-    padding:16px;
-    margin-bottom:12px;
-    box-shadow:var(--shadow);
+    border:1px solid #e4e9ee;
+    box-shadow:0 3px 12px rgba(25,40,60,.055);
 }
 
-hr{
-    border:0;
-    border-top:1px solid #edf0f3;
-    margin:15px 0;
+.coin-card,.project-card{
+    background:#fbfcfd;
+    border-color:var(--v12-border);
 }
 
-.row{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
+.small{
+    color:var(--v12-muted);
 }
 
 button{
-    width:100%;
-    min-height:44px;
-    margin-top:8px;
-    padding:10px 13px;
-    border:1px solid #dce2e8;
-    border-radius:12px;
-    background:#f7f9fb;
-    color:#33404d;
-    font-size:13.5px;
-    font-weight:700;
-    cursor:pointer;
-}
-
-button:active{transform:scale(.988)}
-
-button.green{
-    color:white;
-    border-color:#18a370;
-    background:linear-gradient(180deg,#22b982,#18a36f);
-}
-
-button.danger{
-    color:var(--red);
-    border-color:#ffd4d9;
-    background:var(--red-soft);
+    background:var(--v12-blue);
+    font-weight:600;
 }
 
 button.secondary{
-    color:#5f6b78;
-    background:white;
-    border-color:#dfe4e9;
+    background:#edf1f5;
+    color:#26323d;
 }
 
-input,select,textarea{
-    width:100%;
-    min-height:47px;
-    margin:6px 0 11px;
-    padding:11px 12px;
-    border:1px solid #d9e0e7;
-    border-radius:11px;
-    outline:none;
-    background:#fff;
-    color:var(--text);
-    font:inherit;
-    font-size:16px;
+button.green{
+    background:#2aa674;
 }
 
-input:focus,select:focus,textarea:focus{
-    border-color:#8ea0fa;
-    box-shadow:0 0 0 3px rgba(79,109,245,.09);
+input,select{
+    border-color:#d4dce4;
 }
 
-input:disabled{
-    background:#f3f5f7;
-    color:#7c8793;
+input:focus,select:focus{
+    outline:2px solid rgba(57,119,216,.13);
+    border-color:#7fa5e6;
 }
 
-label{
-    display:block;
-    margin-top:6px;
-    color:#52606d;
-    font-size:13px;
-    font-weight:650;
-}
-
-.status{
-    margin-top:9px;
-    padding:10px 11px;
-    border:1px solid var(--border);
-    border-radius:11px;
-    background:var(--surface-soft);
-    font-size:13px;
-}
-
-.status.success{
-    color:#157955;
-    border-color:#cdeee0;
-    background:var(--green-soft);
-}
-
-.status.warning{
-    color:#93631c;
-    border-color:#f2dfb9;
-    background:var(--orange-soft);
-}
-
-.status.error{
-    color:#b43c49;
-    border-color:#ffd1d6;
-    background:var(--red-soft);
-}
-
-/* Modal remains visually separate from the page */
 .modal{
-    position:fixed;
-    inset:0;
-    z-index:1000;
-    align-items:flex-end;
-    justify-content:center;
-    padding:14px;
-    background:rgba(24,33,43,.38);
-    backdrop-filter:blur(4px);
-    -webkit-backdrop-filter:blur(4px);
+    background:rgba(28,38,50,.45);
+    backdrop-filter:blur(3px);
 }
 
-
-.modal-content{
-    width:min(100%,620px);
-    max-height:88vh;
-    overflow:auto;
-    padding:19px;
-    border-radius:20px;
-    border:1px solid #e0e5eb;
-    background:white;
-    color:var(--text);
-    box-shadow:0 22px 60px rgba(28,39,52,.18);
+.modal-box{
+    border:1px solid #e0e6ec;
+    box-shadow:0 18px 55px rgba(20,30,45,.18);
 }
-
-/* Keep Fund / Projects / History clearly separated like the old version */
-.nav,.bottom-nav{
-    position:fixed;
-    left:50%;
-    bottom:10px;
-    transform:translateX(-50%);
-    width:min(calc(100% - 20px),720px);
-    z-index:100;
-    display:flex;
-    gap:5px;
-    padding:6px;
-    border:1px solid #dde3e9;
-    border-radius:17px;
-    background:rgba(255,255,255,.94);
-    box-shadow:0 8px 28px rgba(35,45,58,.11);
-    backdrop-filter:blur(14px);
-    -webkit-backdrop-filter:blur(14px);
-}
-
-.nav button,.bottom-nav button{
-    flex:1;
-    min-height:48px;
-    margin:0;
-    padding:7px 5px;
-    border:0;
-    border-radius:11px;
-    background:transparent;
-    color:#77828e;
-    font-size:12px;
-}
-
-.nav button.active,.bottom-nav button.active,.bottom-nav .active{
-    color:#3f5be1;
-    background:var(--accent-soft);
-}
-
-/* Coin / project details */
-.coin{
-    display:flex;
-    align-items:center;
-    gap:9px;
-}
-
-.coin::before{
-    content:"";
-    width:8px;
-    height:8px;
-    flex:0 0 8px;
-    border-radius:50%;
-    background:#627af2;
-}
-
-/* Project cards get a very subtle distinction, not a dark theme */
-.project-card,#projects .card{
-    border-left:3px solid #d7defd;
-}
-
-/* Make action groups easier to scan */
-.card button.green{
-    margin-top:11px;
-}
-
-@media (hover:hover) and (pointer:fine){
-    button:hover{
-        border-color:#c9d1d9;
-        background:#f1f4f7;
-    }
-    button.green:hover{
-        background:#18a974;
-        color:white;
-    }
-}
-
-@media(max-width:420px){
-    .container{padding-left:11px;padding-right:11px}
-    h1{font-size:24px}
-    .amount{font-size:24px}
-    .card{padding:14px;border-radius:15px}
-    button{font-size:13px}
-}
-
-
-/* TOP TABS: Фонд / Проекты / История */
-body .container > nav{
-    position:sticky;
-    top:8px;
-    z-index:90;
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:6px;
-    width:100%;
-    margin:0 0 18px;
-    padding:6px;
-    border:1px solid #dde3e9;
-    border-radius:16px;
-    background:rgba(255,255,255,.95);
-    box-shadow:0 5px 20px rgba(35,45,58,.08);
-    backdrop-filter:blur(12px);
-    -webkit-backdrop-filter:blur(12px);
-}
-
-body .container > nav button{
-    width:auto;
-    min-height:45px;
-    margin:0;
-    padding:8px 6px;
-    border:0;
-    border-radius:11px;
-    background:transparent;
-    color:#77828e;
-    font-size:13px;
-}
-
-body .container > nav button.active{
-    background:#eef1ff;
-    color:#3f5be1;
-}
-
-/* Only one main page is visible at a time */
-#pageFund,
-#pageProjects,
-#pageHistory{
-    display:none;
-}
-
-#pageFund.active-page,
-#pageProjects.active-page,
-#pageHistory.active-page{
-    display:block;
-}
-
-
-.hidden{display:none !important;}
-.modal:not(.hidden){display:flex;}
 </style>
+
 </head>
 
 <body>
@@ -365,9 +280,9 @@ body .container > nav button.active{
 <h1>🏦 Private Fund</h1>
 
 <nav>
-    <button type="button" id="navFund" class="active" onclick="showPage('fund')">🏦 Фонд</button>
-    <button type="button" id="navProjects" onclick="showPage('projects')">📊 Проекты</button>
-    <button type="button" id="navHistory" onclick="showPage('history')">📜 История</button>
+    <button id="navFund" class="active" onclick="showPage('fund')">🏦 Фонд</button>
+    <button id="navProjects" onclick="showPage('projects')">📊 Проекты</button>
+    <button id="navHistory" onclick="showPage('history')">📜 История</button>
 </nav>
 
 <!-- ФОНД -->
@@ -379,7 +294,7 @@ body .container > nav button.active{
                 <h2>💰 Фонд</h2>
                 <div class="small">Текущие средства</div>
             </div>
-            <button type="button" onclick="openDeposit()">＋ Поступление</button>
+            <button onclick="openDeposit()">＋ Поступление</button>
         </div>
 
         <div id="fundCoins"></div>
@@ -408,7 +323,7 @@ body .container > nav button.active{
                 <h2>📊 Проекты</h2>
                 <div class="small">Распределение фонда</div>
             </div>
-            <button type="button" onclick="openProject()">＋ Проект</button>
+            <button onclick="openProject()">＋ Проект</button>
         </div>
 
         <div id="percentTotal"></div>
@@ -429,7 +344,7 @@ body .container > nav button.active{
 </div>
 
 <!-- MODAL -->
-<div id="modal" class="modal hidden" style="display:none">
+<div id="modal" class="modal hidden">
     <div class="modal-box">
         <button class="close" onclick="closeModal()">✕</button>
         <div id="modalContent"></div>
@@ -506,30 +421,30 @@ if (window.Telegram && Telegram.WebApp) {
 
 function showPage(page) {
 
-    const pages = {
-        fund: document.getElementById("pageFund"),
-        projects: document.getElementById("pageProjects"),
-        history: document.getElementById("pageHistory")
-    };
+    document.getElementById("pageFund").classList.add("hidden");
+    document.getElementById("pageProjects").classList.add("hidden");
+    document.getElementById("pageHistory").classList.add("hidden");
 
-    const navs = {
-        fund: document.getElementById("navFund"),
-        projects: document.getElementById("navProjects"),
-        history: document.getElementById("navHistory")
-    };
+    document.getElementById("navFund").classList.remove("active");
+    document.getElementById("navProjects").classList.remove("active");
+    document.getElementById("navHistory").classList.remove("active");
 
-    Object.values(pages).forEach(el => {
-        if (el) el.classList.remove("active-page");
-    });
+    if (page === "fund") {
+        document.getElementById("pageFund").classList.remove("hidden");
+        document.getElementById("navFund").classList.add("active");
+    }
 
-    Object.values(navs).forEach(el => {
-        if (el) el.classList.remove("active");
-    });
+    if (page === "projects") {
+        document.getElementById("pageProjects").classList.remove("hidden");
+        document.getElementById("navProjects").classList.add("active");
+    }
 
-    if (pages[page]) pages[page].classList.add("active-page");
-    if (navs[page]) navs[page].classList.add("active");
+    if (page === "history") {
+        document.getElementById("pageHistory").classList.remove("hidden");
+        document.getElementById("navHistory").classList.add("active");
+    }
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    render();
 }
 
 /* =========================
@@ -2896,7 +2811,6 @@ function render() {
 }
 
 render();
-showPage('fund');
 
 </script>
 
