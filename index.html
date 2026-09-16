@@ -281,6 +281,13 @@ if (!Array.isArray(data.withdrawals)) data.withdrawals = [];
 if (!Array.isArray(data.deposits)) data.deposits = [];
 if (!Array.isArray(data.history)) data.history = [];
 
+/* Совместимость: отдельная монета/актив внутри проекта */
+data.projects.forEach(p => {
+    if (!p.assetName) p.assetName = "";
+    if (!Number.isFinite(Number(p.assetAvailable))) p.assetAvailable = 0;
+    if (!Number.isFinite(Number(p.assetInvested))) p.assetInvested = 0;
+});
+
 function save() {
     localStorage.setItem("privateFundData", JSON.stringify(data));
 }
@@ -960,17 +967,68 @@ function renderProjects() {
             </div>
 
             <div style="margin-top:12px">
-                <div class="small">Всего инвестировано</div>
+                <div class="small">Всего инвестировано из фонда</div>
                 <b>${money(p.invested)} ${coin ? escapeHtml(coin.name) : ""}</b>
             </div>
 
-            <button class="green" onclick="openInvest('${p.id}')">
-                📤 Инвестировать
+            <hr>
+
+            <div>
+                <div class="small">Актив проекта после обмена</div>
+                ${
+                    p.assetName
+                    ? `
+                        <div class="amount">
+                            ${money(p.assetAvailable)} ${escapeHtml(p.assetName)}
+                        </div>
+                        <div class="small">
+                            В работе / инвестировано: ${money(p.assetInvested)} ${escapeHtml(p.assetName)}
+                        </div>
+                    `
+                    : `<div class="small">Пока не выбран. Можно обменять доступные ${coin ? escapeHtml(coin.name) : ""} на монету проекта.</div>`
+                }
+            </div>
+
+            ${
+                p.assetName && getPendingExitAmount(p) > 0.00000001
+                ? `
+                    <div class="status warning">
+                        К обмену для вывода:
+                        <b>${money(getPendingExitAmount(p))} ${escapeHtml(p.assetName)}</b>
+                    </div>
+
+                    <button onclick="openExitExchange('${p.id}')">
+                        🔁 Обменять прибыль ${escapeHtml(p.assetName)} → ${coin ? escapeHtml(coin.name) : ""}
+                    </button>
+                `
+                : ""
+            }
+
+            <button onclick="openExchangeToAsset('${p.id}')">
+                🔄 Обменять ${coin ? escapeHtml(coin.name) : ""} → монету проекта
             </button>
 
-            <button onclick="openProfit('${p.id}')">
-                📈 Добавить прибыль
-            </button>
+            ${
+                p.assetName
+                ? `
+                    <button class="green" onclick="openInvestAsset('${p.id}')">
+                        📤 Инвестировать ${escapeHtml(p.assetName)}
+                    </button>
+
+                    <button onclick="openProfit('${p.id}')">
+                        📈 Добавить прибыль в ${escapeHtml(p.assetName)}
+                    </button>
+                `
+                : `
+                    <button class="green" onclick="openInvest('${p.id}')">
+                        📤 Инвестировать ${coin ? escapeHtml(coin.name) : ""}
+                    </button>
+
+                    <button onclick="openProfit('${p.id}')">
+                        📈 Добавить прибыль
+                    </button>
+                `
+            }
 
             <button class="secondary" onclick="openProject('${p.id}')">
                 ✏️ Изменить
@@ -1110,7 +1168,10 @@ function commitProject(id, name, coinId, percent) {
             coinId,
             percent,
             available: 0,
-            invested: 0
+            invested: 0,
+            assetName: "",
+            assetAvailable: 0,
+            assetInvested: 0
         });
     }
 
@@ -1307,6 +1368,163 @@ function escapeJs(text) {
 
 
 /* =========================
+   ОБМЕН СРЕДСТВ ФОНДА НА АКТИВ ПРОЕКТА
+========================= */
+
+function openExchangeToAsset(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>🔄 Обмен для проекта</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b><br>
+            Доступно от фонда:
+            <b>${money(p.available)} ${escapeHtml(coin.name)}</b>
+        </p>
+
+        <label>Отдал (${escapeHtml(coin.name)})</label>
+        <input id="exchangeFromAmount"
+            type="number"
+            step="any"
+            min="0"
+            max="${p.available}"
+            placeholder="Например: 500">
+
+        <label>Получил монету</label>
+        <input id="exchangeAssetName"
+            value="${p.assetName ? escapeAttr(p.assetName) : ""}"
+            placeholder="Например: BYA">
+
+        <label>Получил количество</label>
+        <input id="exchangeAssetAmount"
+            type="number"
+            step="any"
+            min="0"
+            placeholder="Например: 20">
+
+        <div class="small">
+            Курс не рассчитывается автоматически. Укажи фактические суммы обмена.
+        </div>
+
+        <button class="green" onclick="exchangeToAsset('${id}')">
+            💾 Записать обмен
+        </button>
+    `;
+
+    openModal();
+}
+
+
+function exchangeToAsset(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    const fromAmount = Number(document.getElementById("exchangeFromAmount").value);
+    const assetName = document.getElementById("exchangeAssetName").value.trim().toUpperCase();
+    const assetAmount = Number(document.getElementById("exchangeAssetAmount").value);
+
+    if (!fromAmount || fromAmount <= 0 || !assetName || !assetAmount || assetAmount <= 0) {
+        alert("Укажи сколько отдал, название монеты и сколько получил.");
+        return;
+    }
+
+    if (fromAmount > p.available + 0.00000001) {
+        alert(`Недостаточно доступных ${coin.name} в этом проекте.`);
+        return;
+    }
+
+    if (p.assetName && p.assetName.toUpperCase() !== assetName &&
+        (Number(p.assetAvailable) > 0.00000001 || Number(p.assetInvested) > 0.00000001)) {
+        alert(
+            `В проекте уже используется ${p.assetName}.\n\n` +
+            `Сначала нужно вывести/обменять остаток этой монеты, прежде чем менять актив проекта.`
+        );
+        return;
+    }
+
+    p.assetName = assetName;
+    p.available -= fromAmount;
+    p.assetAvailable = Number(p.assetAvailable || 0) + assetAmount;
+
+    addHistory(
+        "exchange",
+        `${p.name}: обмен ${money(fromAmount)} ${coin.name} → ${money(assetAmount)} ${assetName}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ИНВЕСТИЦИЯ АКТИВА ПРОЕКТА
+========================= */
+
+function openInvestAsset(id) {
+
+    const p = getProject(id);
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>📤 Инвестировать ${escapeHtml(p.assetName)}</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b><br>
+            Доступно:
+            <b>${money(p.assetAvailable)} ${escapeHtml(p.assetName)}</b>
+        </p>
+
+        <label>Сколько инвестировать?</label>
+        <input id="investAssetAmount"
+            type="number"
+            step="any"
+            min="0"
+            max="${p.assetAvailable}"
+            placeholder="Введите сумму">
+
+        <button class="green" onclick="investAsset('${id}')">
+            Подтвердить инвестицию
+        </button>
+    `;
+
+    openModal();
+}
+
+
+function investAsset(id) {
+
+    const p = getProject(id);
+    const amount = Number(document.getElementById("investAssetAmount").value);
+
+    if (!amount || amount <= 0) {
+        alert("Введите сумму.");
+        return;
+    }
+
+    if (amount > Number(p.assetAvailable) + 0.00000001) {
+        alert(`Недостаточно ${p.assetName}.`);
+        return;
+    }
+
+    p.assetAvailable -= amount;
+    p.assetInvested = Number(p.assetInvested || 0) + amount;
+
+    addHistory(
+        "invest",
+        `Инвестиция: ${money(amount)} ${p.assetName} → ${p.name}`
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
    ИНВЕСТИЦИЯ
 ========================= */
 
@@ -1379,24 +1597,26 @@ function openProfit(id) {
 
     const p = getProject(id);
     const coin = getCoin(p.coinId);
+    const profitCoin = p.assetName || coin.name;
 
     document.getElementById("modalContent").innerHTML = `
-
         <h2>📈 Прибыль проекта</h2>
 
         <p>
-            <b>${escapeHtml(p.name)}</b>
+            <b>${escapeHtml(p.name)}</b><br>
+            Прибыль указывается в <b>${escapeHtml(profitCoin)}</b>.
         </p>
 
-        <label>Полученная прибыль</label>
+        <label>Полученная прибыль (${escapeHtml(profitCoin)})</label>
         <input id="profitAmount"
             type="number"
             step="any"
-            placeholder="Например: 100">
+            min="0"
+            placeholder="Например: 4">
 
         <div class="small">
-            По текущему правилу 50% пойдёт на реинвестирование,
-            50% — на вывод.
+            50% будет реинвестировано в этой же монете,
+            а 50% попадёт в раздел «К обмену для вывода».
         </div>
 
         <button onclick="addProfit('${id}')">
@@ -1406,6 +1626,7 @@ function openProfit(id) {
 
     openModal();
 }
+
 
 function addProfit(id) {
 
@@ -1422,46 +1643,190 @@ function addProfit(id) {
     }
 
     const reinvest = profit * 0.5;
-    const withdraw = profit * 0.5;
+    const withdrawPart = profit * 0.5;
 
-    const projects = data.projects.filter(
-        x => x.coinId === p.coinId
-    );
+    /*
+       Если проект работает в собственной монете (например BYA),
+       реинвест остаётся именно в BYA.
+       Часть для вывода также хранится в BYA до ручного обратного обмена.
+    */
+    if (p.assetName) {
 
-    projects.forEach(project => {
-        project.available += reinvest * (project.percent / 100);
-    });
+        p.assetInvested = Number(p.assetInvested || 0) + reinvest;
+
+        if (!Array.isArray(p.pendingExit)) p.pendingExit = [];
+
+        p.pendingExit.push({
+            id: Date.now().toString(),
+            assetName: p.assetName,
+            amount: withdrawPart,
+            date: dateNow()
+        });
+
+        addHistory(
+            "profit",
+            `Прибыль ${money(profit)} ${p.assetName} от ${p.name}. ` +
+            `Реинвест: ${money(reinvest)} ${p.assetName}, ` +
+            `к обмену для вывода: ${money(withdrawPart)} ${p.assetName}`
+        );
+
+    } else {
+
+        // Старая логика для проекта, который работает прямо в монете фонда.
+        const projects = data.projects.filter(
+            x => x.coinId === p.coinId
+        );
+
+        projects.forEach(project => {
+            project.available += reinvest * (project.percent / 100);
+        });
+
+        let existing = data.withdrawals.find(
+            w => w.coinId === p.coinId
+        );
+
+        if (!existing) {
+            existing = {
+                id: Date.now().toString(),
+                coinId: p.coinId,
+                amount: 0,
+                sent: 0
+            };
+            data.withdrawals.push(existing);
+        }
+
+        existing.amount += withdrawPart;
+        coin.balance += profit;
+
+        addHistory(
+            "profit",
+            `Прибыль ${money(profit)} ${coin.name} от ${p.name}. ` +
+            `Реинвест: ${money(reinvest)}, вывод: ${money(withdrawPart)}`
+        );
+    }
+
+    save();
+    closeModal();
+    render();
+}
+
+
+/* =========================
+   ОБРАТНЫЙ ОБМЕН ПРИБЫЛИ ДЛЯ ВЫВОДА
+========================= */
+
+function getPendingExitAmount(p) {
+    if (!Array.isArray(p.pendingExit)) return 0;
+    return p.pendingExit.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+}
+
+
+function openExitExchange(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+    const pending = getPendingExitAmount(p);
+
+    if (!p.assetName || pending <= 0.00000001) {
+        alert("Нет прибыли в монете проекта для обратного обмена.");
+        return;
+    }
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>🔁 Обмен прибыли для вывода</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b><br>
+            К обмену:
+            <b>${money(pending)} ${escapeHtml(p.assetName)}</b>
+        </p>
+
+        <label>Отдал (${escapeHtml(p.assetName)})</label>
+        <input id="exitFromAmount"
+            type="number"
+            step="any"
+            min="0"
+            max="${pending}"
+            value="${pending}">
+
+        <label>Получил (${escapeHtml(coin.name)})</label>
+        <input id="exitToAmount"
+            type="number"
+            step="any"
+            min="0"
+            placeholder="Например: 55">
+
+        <div class="small">
+            Укажи фактический результат обратного обмена.
+            Полученные ${escapeHtml(coin.name)} попадут в «К выводу».
+        </div>
+
+        <button class="green" onclick="exchangeProfitForWithdrawal('${id}')">
+            💾 Записать обмен
+        </button>
+    `;
+
+    openModal();
+}
+
+
+function exchangeProfitForWithdrawal(id) {
+
+    const p = getProject(id);
+    const coin = getCoin(p.coinId);
+
+    const fromAmount = Number(document.getElementById("exitFromAmount").value);
+    const toAmount = Number(document.getElementById("exitToAmount").value);
+    const pending = getPendingExitAmount(p);
+
+    if (!fromAmount || fromAmount <= 0 || !toAmount || toAmount <= 0) {
+        alert("Укажи обе суммы обмена.");
+        return;
+    }
+
+    if (fromAmount > pending + 0.00000001) {
+        alert(`Нельзя обменять больше ${money(pending)} ${p.assetName}.`);
+        return;
+    }
+
+    let left = fromAmount;
+
+    for (const item of p.pendingExit) {
+        if (left <= 0) break;
+        const take = Math.min(Number(item.amount || 0), left);
+        item.amount -= take;
+        left -= take;
+    }
+
+    p.pendingExit = p.pendingExit.filter(x => Number(x.amount) > 0.00000001);
 
     let existing = data.withdrawals.find(
         w => w.coinId === p.coinId
     );
 
     if (!existing) {
-
         existing = {
             id: Date.now().toString(),
             coinId: p.coinId,
             amount: 0,
             sent: 0
         };
-
         data.withdrawals.push(existing);
     }
 
-    existing.amount += withdraw;
-
-    coin.balance += profit;
+    existing.amount += toAmount;
+    coin.balance += toAmount;
 
     addHistory(
-        "profit",
-        `Прибыль ${money(profit)} ${coin.name} от ${p.name}. ` +
-        `Реинвест: ${money(reinvest)}, вывод: ${money(withdraw)}`
+        "exchange",
+        `${p.name}: для вывода обменено ${money(fromAmount)} ${p.assetName} → ${money(toAmount)} ${coin.name}`
     );
 
     save();
     closeModal();
     render();
 }
+
 
 /* =========================
    ВЫВОД
