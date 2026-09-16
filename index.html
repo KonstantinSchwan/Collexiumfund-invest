@@ -51,23 +51,6 @@ h2 { font-size: 20px; margin-top: 0; }
 .amount { font-size: 22px; font-weight: bold; }
 .small { font-size: 13px; color: #6b7280; }
 
-.actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-.actions button { margin-top: 0; }
-
-.fund-details {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
-    font-size: 14px;
-    line-height: 1.7;
-    color: #5b6470;
-}
-
 button {
     border: 0;
     border-radius: 11px;
@@ -220,10 +203,7 @@ hr {
                 <h2>💰 Фонд</h2>
                 <div class="small">Текущие средства</div>
             </div>
-            <div class="actions">
-                <button onclick="openDeposit()">＋ Поступление</button>
-                <button class="secondary" onclick="openExchange()">🔄 Обмен</button>
-            </div>
+            <button onclick="openDeposit()">＋ Поступление</button>
         </div>
 
         <div id="fundCoins"></div>
@@ -291,7 +271,6 @@ let data = JSON.parse(localStorage.getItem("privateFundData")) || {
     projects: [],
     withdrawals: [],
     deposits: [],
-    exchanges: [],
     history: []
 };
 
@@ -300,7 +279,6 @@ if (!Array.isArray(data.coins)) data.coins = [];
 if (!Array.isArray(data.projects)) data.projects = [];
 if (!Array.isArray(data.withdrawals)) data.withdrawals = [];
 if (!Array.isArray(data.deposits)) data.deposits = [];
-if (!Array.isArray(data.exchanges)) data.exchanges = [];
 if (!Array.isArray(data.history)) data.history = [];
 
 function save() {
@@ -392,43 +370,6 @@ function getProject(id) {
     return data.projects.find(p => p.id === id);
 }
 
-function getProjectReserved(coinId) {
-    return data.projects
-        .filter(p => p.coinId === coinId)
-        .reduce((sum, p) => sum + Math.max(0, Number(p.available || 0)), 0);
-}
-
-function getWithdrawalReserved(coinId) {
-    return data.withdrawals
-        .filter(w => w.coinId === coinId)
-        .reduce((sum, w) => sum + Math.max(0, Number(w.amount || 0) - Number(w.sent || 0)), 0);
-}
-
-function getFreeBalance(coinId) {
-    const coin = getCoin(coinId);
-    if (!coin) return 0;
-    return Math.max(
-        0,
-        Number(coin.balance || 0) -
-        getProjectReserved(coinId) -
-        getWithdrawalReserved(coinId)
-    );
-}
-
-function getAxmCoin() {
-    return data.coins.find(c => c.name.trim().toLowerCase() === "axm");
-}
-
-function addWithdrawal(coinId, amount) {
-    let w = data.withdrawals.find(x => x.coinId === coinId);
-    if (!w) {
-        w = { id: Date.now().toString(), coinId, amount: 0, sent: 0 };
-        data.withdrawals.push(w);
-    }
-    w.amount += Number(amount);
-    return w;
-}
-
 function addHistory(type, text) {
     data.history.unshift({
         id: Date.now().toString(),
@@ -477,35 +418,83 @@ function renderFund() {
         box.innerHTML = `
             <div class="empty">
                 Пока нет монет.<br>
-                Добавь первую монету через «＋ Поступление».
+                Добавь первую монету через «Поступление».
             </div>
         `;
         return;
     }
 
     box.innerHTML = data.coins.map(c => {
-        const total = Number(c.balance || 0);
-        const projectReserved = getProjectReserved(c.id);
-        const withdrawalReserved = getWithdrawalReserved(c.id);
-        const free = getFreeBalance(c.id);
 
         return `
         <div class="coin-card">
             <div class="row">
                 <div>
                     <b>🪙 ${escapeHtml(c.name)}</b>
-                    <div class="small">Общий баланс фонда</div>
+                    <div class="small">Баланс фонда</div>
                 </div>
-                <div class="amount">${money(total)}</div>
-            </div>
 
-            <div class="fund-details">
-                <div>🟢 Свободно: <b>${money(free)} ${escapeHtml(c.name)}</b></div>
-                <div>📊 Проекты: ${money(projectReserved)} ${escapeHtml(c.name)}</div>
-                <div>💸 К выводу: ${money(withdrawalReserved)} ${escapeHtml(c.name)}</div>
+                <div class="amount">${money(c.balance)}</div>
             </div>
-        </div>`;
+        </div>
+        `;
+
     }).join("");
+}
+
+/* =========================
+   СПИСОК ПОСТУПЛЕНИЙ
+========================= */
+
+function renderDeposits() {
+
+    const box = document.getElementById("depositsList");
+
+    if (!data.deposits.length) {
+        box.innerHTML = `
+            <div class="empty">
+                Поступлений пока нет.
+            </div>
+        `;
+        return;
+    }
+
+    box.innerHTML = [...data.deposits]
+        .reverse()
+        .map(d => {
+
+            const coin = getCoin(d.coinId);
+
+            return `
+            <div class="deposit-item">
+
+                <div class="row">
+                    <div>
+                        <b>📥 ${coin ? escapeHtml(coin.name) : "Монета удалена"}</b>
+                        <div class="small">${escapeHtml(d.date)}</div>
+                    </div>
+
+                    <div class="amount plus">
+                        +${money(d.amount)}
+                    </div>
+                </div>
+
+                <div class="deposit-actions">
+
+                    <button onclick="openEditDeposit('${d.id}')">
+                        ✏️ Изменить
+                    </button>
+
+                    <button class="danger" onclick="deleteDeposit('${d.id}')">
+                        🗑 Удалить
+                    </button>
+
+                </div>
+
+            </div>
+            `;
+
+        }).join("");
 }
 
 /* =========================
@@ -873,313 +862,6 @@ function addCoin() {
 }
 
 /* =========================
-   ОБМЕН МОНЕТ
-========================= */
-
-function coinOptionsHtml(selectedId = "") {
-    return data.coins.map(c => `
-        <option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>
-            ${escapeHtml(c.name)}
-        </option>
-    `).join("");
-}
-
-function openExchange() {
-
-    if (data.coins.length < 2) {
-        document.getElementById("modalContent").innerHTML = `
-            <h2>🔄 Обмен монет</h2>
-            <div class="status warning">
-                Для обмена нужны минимум две монеты.
-            </div>
-            <button onclick="openCoin()">＋ Добавить монету</button>
-        `;
-        openModal();
-        return;
-    }
-
-    const from = data.coins[0];
-    const to = data.coins[1];
-
-    document.getElementById("modalContent").innerHTML = `
-        <h2>🔄 Обмен монет</h2>
-
-        <div class="status">
-            Обмениваются только <b>свободные</b> средства.
-            Деньги, уже распределённые проектам или зарезервированные к выводу,
-            защищены от случайного обмена.
-        </div>
-
-        <label>Отдаём</label>
-        <select id="exchangeFrom" onchange="updateExchangePreview()">
-            ${coinOptionsHtml(from.id)}
-        </select>
-
-        <div id="exchangeAvailable" class="small"></div>
-
-        <label>Получаем</label>
-        <select id="exchangeTo" onchange="updateExchangePreview()">
-            ${coinOptionsHtml(to.id)}
-        </select>
-
-        <label>Сколько отдаём?</label>
-        <input id="exchangeAmount" type="number" step="any" min="0"
-               placeholder="Например: 100"
-               oninput="updateExchangePreview()">
-
-        <label>Курс</label>
-        <input id="exchangeRate" type="number" step="any" min="0"
-               placeholder="Сколько FROM за 1 TO"
-               oninput="updateExchangePreview()">
-
-        <div class="small">
-            Курс указывается так: <b>1 получаемая монета = X отдаваемых монет</b>.<br>
-            Например: 1 USDT = 40 AXM.
-        </div>
-
-        <div id="exchangePreview" class="status">
-            Введи сумму и курс.
-        </div>
-
-        <button class="green" onclick="exchangeCoins()">🔄 Выполнить обмен</button>
-    `;
-
-    openModal();
-    updateExchangePreview();
-}
-
-function updateExchangePreview() {
-
-    const from = getCoin(document.getElementById("exchangeFrom").value);
-    const to = getCoin(document.getElementById("exchangeTo").value);
-    const amount = Number(document.getElementById("exchangeAmount").value);
-    const rate = Number(document.getElementById("exchangeRate").value);
-
-    const available = document.getElementById("exchangeAvailable");
-    const preview = document.getElementById("exchangePreview");
-
-    if (from) {
-        available.innerHTML =
-            `Свободно: <b>${money(getFreeBalance(from.id))} ${escapeHtml(from.name)}</b>`;
-    }
-
-    if (!from || !to || from.id === to.id) {
-        preview.className = "status error";
-        preview.innerHTML = "Выбери две разные монеты.";
-        return;
-    }
-
-    if (!amount || amount <= 0 || !rate || rate <= 0) {
-        preview.className = "status";
-        preview.innerHTML = "Введи сумму и курс.";
-        return;
-    }
-
-    preview.className = "status success";
-    preview.innerHTML =
-        `Получишь: <b>${money(amount / rate)} ${escapeHtml(to.name)}</b>`;
-}
-
-function exchangeCoins() {
-
-    const from = getCoin(document.getElementById("exchangeFrom").value);
-    const to = getCoin(document.getElementById("exchangeTo").value);
-    const amount = Number(document.getElementById("exchangeAmount").value);
-    const rate = Number(document.getElementById("exchangeRate").value);
-
-    if (!from || !to || from.id === to.id) {
-        alert("Выбери две разные монеты.");
-        return;
-    }
-
-    if (!amount || amount <= 0 || !rate || rate <= 0) {
-        alert("Введите корректную сумму и курс.");
-        return;
-    }
-
-    const free = getFreeBalance(from.id);
-
-    if (amount > free + 0.00000001) {
-        alert(
-            `Недостаточно свободных средств.\\n\\n` +
-            `Можно обменять максимум ${money(free)} ${from.name}.`
-        );
-        return;
-    }
-
-    const received = amount / rate;
-
-    from.balance -= amount;
-    to.balance += received;
-
-    /*
-       Полученная монета распределяется между проектами
-       этой монеты согласно их процентам.
-    */
-    const allocations = makeDepositAllocations(to.id, received);
-    applyDepositAllocation(allocations, 1);
-
-    data.exchanges.push({
-        id: Date.now().toString(),
-        fromCoinId: from.id,
-        fromAmount: amount,
-        toCoinId: to.id,
-        toAmount: received,
-        rate,
-        purpose: "fund",
-        date: dateNow()
-    });
-
-    addHistory(
-        "exchange",
-        `Обмен: ${money(amount)} ${from.name} → ${money(received)} ${to.name}. ` +
-        `Курс: 1 ${to.name} = ${money(rate)} ${from.name}`
-    );
-
-    save();
-    closeModal();
-    render();
-}
-
-
-/* =========================
-   ОБМЕН СРЕДСТВ К ВЫВОДУ В AXM
-========================= */
-
-function openWithdrawalExchange(id) {
-
-    const w = data.withdrawals.find(x => x.id === id);
-    const axm = getAxmCoin();
-
-    if (!w || !axm) {
-        alert("Не найдено поступление к выводу или монета AXM.");
-        return;
-    }
-
-    const from = getCoin(w.coinId);
-    const remaining = Number(w.amount || 0) - Number(w.sent || 0);
-
-    if (!from || from.id === axm.id || remaining <= 0) {
-        alert("Эту запись нельзя обменять в AXM.");
-        return;
-    }
-
-    document.getElementById("modalContent").innerHTML = `
-        <h2>🔄 Обмен к выводу в AXM</h2>
-
-        <p>
-            Сейчас к выводу:
-            <b>${money(remaining)} ${escapeHtml(from.name)}</b>
-        </p>
-
-        <label>Сколько обменять?</label>
-        <input id="withdrawExchangeAmount"
-               type="number" step="any" min="0"
-               max="${remaining}" value="${remaining}"
-               oninput="updateWithdrawalExchangePreview()">
-
-        <label>Курс</label>
-        <input id="withdrawExchangeRate"
-               type="number" step="any" min="0"
-               placeholder="Сколько ${escapeHtml(from.name)} за 1 AXM"
-               oninput="updateWithdrawalExchangePreview()">
-
-        <div class="small">
-            Например: 1 AXM = 0,025 USDT → введи <b>0,025</b>.
-        </div>
-
-        <div id="withdrawExchangePreview" class="status">
-            Введи курс.
-        </div>
-
-        <button class="green" onclick="exchangeWithdrawalToAxm('${id}')">
-            🔄 Обменять в AXM
-        </button>
-    `;
-
-    openModal();
-}
-
-function updateWithdrawalExchangePreview() {
-
-    const amount = Number(document.getElementById("withdrawExchangeAmount").value);
-    const rate = Number(document.getElementById("withdrawExchangeRate").value);
-    const box = document.getElementById("withdrawExchangePreview");
-
-    if (!amount || !rate || amount <= 0 || rate <= 0) {
-        box.className = "status";
-        box.innerHTML = "Введи курс.";
-        return;
-    }
-
-    box.className = "status success";
-    box.innerHTML = `Получишь: <b>${money(amount / rate)} AXM</b>`;
-}
-
-function exchangeWithdrawalToAxm(id) {
-
-    const w = data.withdrawals.find(x => x.id === id);
-    const axm = getAxmCoin();
-
-    if (!w || !axm) {
-        alert("Не удалось найти данные.");
-        return;
-    }
-
-    const from = getCoin(w.coinId);
-    const remaining = Number(w.amount || 0) - Number(w.sent || 0);
-    const amount = Number(document.getElementById("withdrawExchangeAmount").value);
-    const rate = Number(document.getElementById("withdrawExchangeRate").value);
-
-    if (!from || from.id === axm.id) {
-        alert("Неверная монета.");
-        return;
-    }
-
-    if (!amount || amount <= 0 || !rate || rate <= 0) {
-        alert("Введите корректную сумму и курс.");
-        return;
-    }
-
-    if (amount > remaining + 0.00000001) {
-        alert("Нельзя обменять больше суммы к выводу.");
-        return;
-    }
-
-    const received = amount / rate;
-
-    /*
-       Переносим резерв к выводу из исходной монеты в AXM.
-       Инвестиционные проекты при этом не затрагиваются.
-    */
-    w.amount -= amount;
-    from.balance -= amount;
-    axm.balance += received;
-    addWithdrawal(axm.id, received);
-
-    data.exchanges.push({
-        id: Date.now().toString(),
-        fromCoinId: from.id,
-        fromAmount: amount,
-        toCoinId: axm.id,
-        toAmount: received,
-        rate,
-        purpose: "withdrawal",
-        date: dateNow()
-    });
-
-    addHistory(
-        "exchange",
-        `Обмен к выводу: ${money(amount)} ${from.name} → ` +
-        `${money(received)} AXM. Курс: 1 AXM = ${money(rate)} ${from.name}`
-    );
-
-    save();
-    closeModal();
-    render();
-}
-
-/* =========================
    ПРОЕКТЫ
 ========================= */
 
@@ -1222,16 +904,19 @@ function renderProjects() {
         );
 
         let statusClass = "success";
-        let statusText = "100% — распределение полностью задано";
+        let statusText = "100% — распределение корректное";
 
-        if (total > 100.000001) {
+        if (Math.abs(total - 100) > 0.000001) {
+
             statusClass = "error";
-            statusText =
-                `${money(total)}% — превышение на ${money(total - 100)}%`;
-        } else if (total < 99.999999) {
-            statusClass = "warning";
-            statusText =
-                `${money(total)}% — можно добавить ещё ${money(100 - total)}%`;
+
+            if (total > 100) {
+                statusText =
+                    `${money(total)}% — превышение на ${money(total - 100)}%`;
+            } else {
+                statusText =
+                    `${money(total)}% — не хватает ${money(100 - total)}%`;
+            }
         }
 
         percentHtml += `
@@ -1350,7 +1035,7 @@ function openProject(id = null) {
                 placeholder="Например: 20">
 
             <div class="small">
-                Можно создавать проекты постепенно. Сумма процентов одной монеты не может превышать 100%.
+                Все проекты одной монеты должны в сумме составлять ровно 100%.
             </div>
 
             <button onclick="saveProject('${id || ""}')">
@@ -1366,42 +1051,50 @@ function saveProject(id) {
     const name = document.getElementById("projectName").value.trim();
     const coinId = document.getElementById("projectCoin").value;
     const percent = Number(document.getElementById("projectPercent").value);
-    const oldProject = id ? getProject(id) : null;
 
-    if (!name || !coinId || !Number.isFinite(percent) || percent <= 0 || percent > 100) {
-        alert("Заполни все поля. Процент должен быть от 0,01 до 100.");
+    if (!name || !coinId || percent < 0) {
+        alert("Заполни все поля.");
         return;
     }
 
-    if (
-        oldProject &&
-        oldProject.coinId !== coinId &&
-        (Number(oldProject.available || 0) > 0.00000001 ||
-         Number(oldProject.invested || 0) > 0.00000001)
-    ) {
-        alert("Нельзя изменить монету проекта, пока в нём есть средства.");
-        return;
-    }
+    let total = 0;
 
-    let total = percent;
     data.projects.forEach(p => {
-        if (p.coinId === coinId && p.id !== id) total += Number(p.percent || 0);
+
+        if (p.coinId === coinId && p.id !== id) {
+            total += Number(p.percent);
+        }
+
     });
 
+    total += percent;
+
+    /*
+       Теперь можно нормально создавать проекты по очереди:
+       например сначала 10%, потом ещё 20%.
+       Последний проект можно сделать на оставшиеся 70%.
+       Нельзя сохранить проект, если сумма превышает 100%.
+    */
     if (total > 100.000001) {
+
         alert(
-            `Для монеты ${getCoin(coinId).name} нельзя распределить больше 100%.\n\n` +
+            `Для монеты ${getCoin(coinId).name} нельзя превысить 100%.\n\n` +
             `Сейчас получится: ${money(total)}%`
         );
+
         return;
     }
 
     if (id) {
+
         const project = getProject(id);
+
         project.name = name;
         project.coinId = coinId;
         project.percent = percent;
+
     } else {
+
         data.projects.push({
             id: Date.now().toString(),
             name,
@@ -1412,8 +1105,10 @@ function saveProject(id) {
         });
     }
 
-    addHistory("project",
-        `${id ? "Изменён" : "Создан"} проект: ${name} (${money(percent)}%)`);
+    addHistory(
+        "project",
+        `${id ? "Изменён" : "Создан"} проект: ${name} — ${money(percent)}%`
+    );
 
     save();
     closeModal();
@@ -1524,13 +1219,11 @@ function openProfit(id) {
 function addProfit(id) {
 
     const p = getProject(id);
-    const coin = getCoin(p ? p.coinId : null);
-    const profit = Number(document.getElementById("profitAmount").value);
+    const coin = getCoin(p.coinId);
 
-    if (!p || !coin) {
-        alert("Проект или монета не найдены.");
-        return;
-    }
+    const profit = Number(
+        document.getElementById("profitAmount").value
+    );
 
     if (!profit || profit <= 0) {
         alert("Введите прибыль.");
@@ -1540,18 +1233,33 @@ function addProfit(id) {
     const reinvest = profit * 0.5;
     const withdraw = profit * 0.5;
 
-    coin.balance += profit;
+    const projects = data.projects.filter(
+        x => x.coinId === p.coinId
+    );
 
-    const projects = data.projects.filter(x => x.coinId === p.coinId);
-    const totalPercent = projects.reduce((sum, x) => sum + Number(x.percent || 0), 0);
+    projects.forEach(project => {
+        project.available += reinvest * (project.percent / 100);
+    });
 
-    if (projects.length && totalPercent > 0) {
-        projects.forEach(project => {
-            project.available += reinvest * (Number(project.percent) / totalPercent);
-        });
+    let existing = data.withdrawals.find(
+        w => w.coinId === p.coinId
+    );
+
+    if (!existing) {
+
+        existing = {
+            id: Date.now().toString(),
+            coinId: p.coinId,
+            amount: 0,
+            sent: 0
+        };
+
+        data.withdrawals.push(existing);
     }
 
-    addWithdrawal(coin.id, withdraw);
+    existing.amount += withdraw;
+
+    coin.balance += profit;
 
     addHistory(
         "profit",
@@ -1604,14 +1312,6 @@ function renderWithdrawals() {
                     ${money(remaining)}
                 </div>
             </div>
-
-            ${
-                coin && coin.name.trim().toLowerCase() !== "axm"
-                ? `<button class="secondary" onclick="openWithdrawalExchange('${w.id}')">
-                       🔄 Обменять в AXM
-                   </button>`
-                : ""
-            }
 
             <button onclick="openWithdrawal('${w.id}')">
                 📤 Указать отправленную сумму
@@ -1726,18 +1426,6 @@ function renderHistory() {
 function deleteProject(id) {
 
     const p = getProject(id);
-
-    if (
-        Number(p.available || 0) > 0.00000001 ||
-        Number(p.invested || 0) > 0.00000001
-    ) {
-        alert(
-            "Нельзя удалить проект, пока в нём есть средства.\n\n" +
-            `Доступно: ${money(p.available)}\n` +
-            `Инвестировано: ${money(p.invested)}`
-        );
-        return;
-    }
 
     if (!confirm(
         `Удалить проект "${p.name}"?\n\n` +
