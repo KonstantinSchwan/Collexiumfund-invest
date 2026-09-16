@@ -271,6 +271,191 @@ input:focus,select:focus{
 }
 </style>
 
+
+<style>
+/* v13 — visual-only upgrade. Functional code remains untouched. */
+:root{
+    --bg:#171b22;
+    --bg2:#1d222b;
+    --card:#252b35;
+    --card2:#202630;
+    --line:#343c48;
+    --text:#f3f6fa;
+    --muted:#9da7b3;
+    --blue:#5d82f3;
+    --blue2:#496ee0;
+    --green:#32b982;
+    --red:#e75d68;
+}
+
+html,body{
+    background:#171b22 !important;
+    color:var(--text) !important;
+}
+
+body{
+    background:
+        radial-gradient(circle at 50% -120px,rgba(93,130,243,.16),transparent 390px),
+        linear-gradient(180deg,#1c2129 0%,#15191f 100%) !important;
+    min-height:100vh;
+}
+
+.container{
+    max-width:720px !important;
+    padding:18px 14px 34px !important;
+}
+
+h1,h2,h3{
+    color:var(--text) !important;
+}
+
+h1{
+    text-align:center;
+    margin:8px 0 18px !important;
+    font-size:26px !important;
+}
+
+.small{
+    color:var(--muted) !important;
+}
+
+/* Top navigation stays exactly where the working v7 expects it */
+nav{
+    max-width:520px;
+    margin:0 auto 20px !important;
+    padding:5px !important;
+    border:1px solid var(--line) !important;
+    border-radius:15px !important;
+    background:#222832 !important;
+    box-shadow:0 8px 24px rgba(0,0,0,.16) !important;
+}
+
+nav button{
+    min-height:44px !important;
+    margin:0 !important;
+    border:0 !important;
+    border-radius:11px !important;
+    background:transparent !important;
+    color:#9fa9b6 !important;
+    font-weight:700 !important;
+}
+
+nav button.active{
+    background:linear-gradient(180deg,var(--blue),var(--blue2)) !important;
+    color:white !important;
+    box-shadow:0 4px 12px rgba(73,110,224,.27) !important;
+}
+
+/* Cards */
+.card{
+    background:linear-gradient(180deg,#272e38,#222832) !important;
+    border:1px solid var(--line) !important;
+    border-radius:17px !important;
+    box-shadow:0 7px 22px rgba(0,0,0,.13) !important;
+    color:var(--text) !important;
+}
+
+.coin-card,.project-card{
+    background:#202630 !important;
+    border:1px solid #363f4b !important;
+    border-radius:14px !important;
+    color:var(--text) !important;
+}
+
+.amount{
+    color:white !important;
+}
+
+/* Buttons: centered and less visually noisy */
+.card button{
+    display:block;
+    width:min(100%,360px) !important;
+    margin:9px auto 0 !important;
+    min-height:43px !important;
+    border-radius:11px !important;
+    font-weight:700 !important;
+}
+
+button{
+    background:linear-gradient(180deg,#5d82f3,#496ee0) !important;
+    border:1px solid #688bf2 !important;
+    color:white !important;
+}
+
+button.secondary{
+    background:#303844 !important;
+    border-color:#414b58 !important;
+    color:#dce2e9 !important;
+}
+
+button.green{
+    background:linear-gradient(180deg,#38bf89,#2ca875) !important;
+    border-color:#46c895 !important;
+    color:white !important;
+}
+
+button.danger{
+    background:#3a292f !important;
+    border-color:#5b343c !important;
+    color:#ff8b94 !important;
+}
+
+/* Inputs */
+input,select,textarea{
+    background:#181d24 !important;
+    border:1px solid #3a4451 !important;
+    color:#f2f5f8 !important;
+    border-radius:11px !important;
+}
+
+input::placeholder,textarea::placeholder{
+    color:#707b88 !important;
+}
+
+label{
+    color:#bdc5cf !important;
+}
+
+/* Status / history areas */
+.status{
+    background:#1c222a !important;
+    border-color:#39424e !important;
+    color:#c9d0d8 !important;
+}
+
+/* Modal: only styling, visibility logic remains original */
+.modal{
+    background:rgba(7,9,12,.68) !important;
+    backdrop-filter:blur(5px);
+    -webkit-backdrop-filter:blur(5px);
+}
+
+.modal-box{
+    background:#252b35 !important;
+    border:1px solid #3b4551 !important;
+    color:var(--text) !important;
+    border-radius:18px !important;
+    box-shadow:0 24px 70px rgba(0,0,0,.35) !important;
+}
+
+/* Preserve utility hiding from original app */
+.hidden{
+    display:none !important;
+}
+
+hr{
+    border-color:#353e49 !important;
+}
+
+@media(max-width:480px){
+    .container{padding-left:11px !important;padding-right:11px !important}
+    h1{font-size:23px !important}
+    nav{margin-bottom:15px !important}
+    .card{border-radius:15px !important}
+    .card button{width:min(100%,330px) !important}
+}
+</style>
+
 </head>
 
 <body>
