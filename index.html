@@ -571,8 +571,8 @@ function openProject(id = null) {
                 value="${project ? project.percent : ""}"
                 placeholder="Например: 20">
 
-            <div class="small">
-                Все проекты одной монеты должны в сумме составлять ровно 100%.
+            <div id="percentInfo" class="status warning">
+                Можно создавать проекты постепенно. Максимум для одной монеты — 100%.
             </div>
 
             <button onclick="saveProject('${id || ""}')">💾 Сохранить</button>
@@ -581,6 +581,49 @@ function openProject(id = null) {
     `;
 
     openModal();
+
+    const percentInput = document.getElementById("projectPercent");
+    const coinInput = document.getElementById("projectCoin");
+
+    function updatePercentInfo() {
+        if (!percentInput || !coinInput) return;
+
+        const selectedCoinId = coinInput.value;
+        const currentPercent = Number(percentInput.value) || 0;
+        let alreadyUsed = 0;
+
+        data.projects.forEach(item => {
+            if (item.coinId === selectedCoinId && item.id !== id) {
+                alreadyUsed += Number(item.percent);
+            }
+        });
+
+        const totalAfter = alreadyUsed + currentPercent;
+        const remaining = Math.max(0, 100 - alreadyUsed);
+        const info = document.getElementById("percentInfo");
+
+        if (!info) return;
+
+        if (totalAfter > 100) {
+            info.className = "status error";
+            info.innerHTML =
+                `Будет: <b>${money(totalAfter)}%</b><br>` +
+                `Превышение на <b>${money(totalAfter - 100)}%</b>.`;
+        } else if (Math.abs(totalAfter - 100) < 0.000001) {
+            info.className = "status success";
+            info.innerHTML = `<b>100%</b> — распределение полностью заполнено.`;
+        } else {
+            info.className = "status warning";
+            info.innerHTML =
+                `Уже занято: <b>${money(alreadyUsed)}%</b><br>` +
+                `Можно поставить до: <b>${money(remaining)}%</b><br>` +
+                `После сохранения будет: <b>${money(totalAfter)}%</b>`;
+        }
+    }
+
+    if (percentInput) percentInput.addEventListener("input", updatePercentInfo);
+    if (coinInput) coinInput.addEventListener("change", updatePercentInfo);
+    updatePercentInfo();
 }
 
 function saveProject(id) {
@@ -603,10 +646,11 @@ function saveProject(id) {
 
     total += percent;
 
-    if (Math.abs(total - 100) > 0.000001) {
+    if (total > 100.000001) {
         alert(
-            `Для монеты ${getCoin(coinId).name} сумма процентов должна быть ровно 100%.\n\n` +
-            `Сейчас получится: ${total}%`
+            `Для монеты ${getCoin(coinId).name} нельзя распределить больше 100%.\n\n` +
+            `Сейчас получится: ${money(total)}%\n` +
+            `Максимально допустимо: 100%`
         );
         return;
     }
