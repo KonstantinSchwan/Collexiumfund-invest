@@ -520,6 +520,15 @@ hr{
     </div>
 
     <div class="card">
+        <h2>🔁 Возвраты из проектов</h2>
+        <div class="small">
+            Монеты, полученные при выходе из проекта. Сначала обменяй их в AXM,
+            затем AXM автоматически распределятся по активным проектам.
+        </div>
+        <div id="exitAssetsList"></div>
+    </div>
+
+    <div class="card">
         <h2>💸 К выводу</h2>
         <div id="withdrawals"></div>
     </div>
@@ -591,6 +600,8 @@ data.projects.forEach(p => {
     if (!Number.isFinite(Number(p.assetAvailable))) p.assetAvailable = 0;
     if (!Number.isFinite(Number(p.assetInvested))) p.assetInvested = 0;
 });
+
+if (!Array.isArray(data.exitAssets)) data.exitAssets = [];
 
 function save() {
     localStorage.setItem("privateFundData", JSON.stringify(data));
@@ -2826,6 +2837,157 @@ function exchangeProfitForWithdrawal(id) {
    ВЫВОД
 ========================= */
 
+
+function renderExitAssets() {
+
+    const box = document.getElementById("exitAssetsList");
+    if (!box) return;
+
+    const items = (data.exitAssets || []).filter(x => Number(x.amount || 0) > 0.00000001);
+
+    if (!items.length) {
+        box.innerHTML = `<div class="small" style="margin-top:10px">Сейчас нет монет, ожидающих обмена в AXM.</div>`;
+        return;
+    }
+
+    box.innerHTML = items.map(item => {
+        const coin = getCoin(item.coinId);
+        return `
+            <div class="coin-card" style="margin-top:10px">
+                <div class="row">
+                    <div>
+                        <b>${coin ? escapeHtml(coin.name) : "Монета удалена"}</b>
+                        <div class="small">Из проекта: ${escapeHtml(item.projectName || "")}</div>
+                    </div>
+                    <b>${money(item.amount)}</b>
+                </div>
+                <button onclick="openExitAssetToAXM('${item.id}')">
+                    🔄 Обменять в AXM
+                </button>
+            </div>
+        `;
+    }).join("");
+}
+
+function openExitAssetToAXM(itemId) {
+
+    const item = (data.exitAssets || []).find(x => x.id === itemId);
+    if (!item) return;
+
+    const fromCoin = getCoin(item.coinId);
+    const axmCoin = data.coins.find(c =>
+        String(c.name || "").trim().toUpperCase() === "AXM"
+    );
+
+    if (!fromCoin || !axmCoin) {
+        alert("Не найдена исходная монета или AXM.");
+        return;
+    }
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>🔄 Обмен в AXM</h2>
+
+        <div class="status">
+            Из проекта: <b>${escapeHtml(item.projectName || "")}</b><br>
+            Доступно: <b>${money(item.amount)} ${escapeHtml(fromCoin.name)}</b>
+        </div>
+
+        <label>Сколько ${escapeHtml(fromCoin.name)} отдаём?</label>
+        <input id="exitAssetFromAmount"
+               type="number"
+               step="any"
+               min="0"
+               max="${item.amount}"
+               value="${item.amount}">
+
+        <label>Сколько AXM получили?</label>
+        <input id="exitAssetAXMAmount"
+               type="number"
+               step="any"
+               min="0"
+               placeholder="Фактическое количество AXM">
+
+        <div class="small">
+            После сохранения полученные AXM автоматически распределятся
+            между активными проектами по текущим процентам.
+        </div>
+
+        <button class="green" onclick="exchangeExitAssetToAXM('${itemId}')">
+            ✓ Обменять и распределить AXM
+        </button>
+
+        <button class="secondary" onclick="closeModal()">Отмена</button>
+    `;
+
+    openModal();
+}
+
+function exchangeExitAssetToAXM(itemId) {
+
+    const item = (data.exitAssets || []).find(x => x.id === itemId);
+    if (!item) return;
+
+    const fromCoin = getCoin(item.coinId);
+    const axmCoin = data.coins.find(c =>
+        String(c.name || "").trim().toUpperCase() === "AXM"
+    );
+
+    if (!fromCoin || !axmCoin) {
+        alert("Не найдена исходная монета или AXM.");
+        return;
+    }
+
+    const fromAmount = Number(document.getElementById("exitAssetFromAmount").value);
+    const axmAmount = Number(document.getElementById("exitAssetAXMAmount").value);
+
+    if (!Number.isFinite(fromAmount) || fromAmount <= 0 ||
+        !Number.isFinite(axmAmount) || axmAmount <= 0) {
+        alert("Укажи фактические суммы обмена.");
+        return;
+    }
+
+    if (fromAmount > Number(item.amount || 0) + 0.00000001) {
+        alert(`Можно обменять максимум ${money(item.amount)} ${fromCoin.name}.`);
+        return;
+    }
+
+    if (fromAmount > Number(fromCoin.balance || 0) + 0.00000001) {
+        alert(`В фонде недостаточно ${fromCoin.name}.`);
+        return;
+    }
+
+    fromCoin.balance = Number(fromCoin.balance || 0) - fromAmount;
+    axmCoin.balance = Number(axmCoin.balance || 0) + axmAmount;
+    item.amount = Number(item.amount || 0) - fromAmount;
+
+    const projects = data.projects.filter(p => p.coinId === axmCoin.id);
+
+    if (!projects.length) {
+        addHistory(
+            "exchange",
+            `${money(fromAmount)} ${fromCoin.name} → ${money(axmAmount)} AXM. ` +
+            `Активных проектов нет, AXM оставлены в фонде.`
+        );
+    } else {
+        projects.forEach(p => {
+            const allocation = axmAmount * Number(p.percent || 0) / 100;
+            p.available = Number(p.available || 0) + allocation;
+        });
+
+        addHistory(
+            "exchange",
+            `${money(fromAmount)} ${fromCoin.name} → ${money(axmAmount)} AXM. ` +
+            `AXM распределены по активным проектам по текущим процентам.`
+        );
+    }
+
+    data.exitAssets = data.exitAssets.filter(x => Number(x.amount || 0) > 0.00000001);
+
+    save();
+    closeModal();
+    render();
+}
+
 function renderWithdrawals() {
 
     const box = document.getElementById("withdrawals");
@@ -3265,10 +3427,21 @@ function executeProjectExit(payload, redistribution) {
         p.invested = 0;
         p.assetInvested = 0;
 
+        if (exitCoin.id !== p.coinId && net > 0.00000001) {
+            data.exitAssets.push({
+                id: (Date.now() + Math.random()).toString(),
+                projectName: p.name,
+                coinId: exitCoin.id,
+                amount: net,
+                date: dateNow()
+            });
+        }
+
         addHistory(
             "project",
             `Выход из проекта ${p.name}: получено ${money(gross)} ${exitCoin.name}, ` +
-            `комиссия ${money(fee)}, в фонд возвращено ${money(net)} ${exitCoin.name}.`
+            `комиссия ${money(fee)}, в фонд возвращено ${money(net)} ${exitCoin.name}.` +
+            (exitCoin.id !== p.coinId ? ` Ожидает обмена в AXM.` : "")
         );
 
         save();
@@ -3324,11 +3497,19 @@ function executeProjectExit(payload, redistribution) {
 
         exitCoin.balance = Number(exitCoin.balance || 0) + net;
 
+        data.exitAssets.push({
+            id: (Date.now() + Math.random()).toString(),
+            projectName: closingName,
+            coinId: exitCoin.id,
+            amount: net,
+            date: dateNow()
+        });
+
         addHistory(
             "project",
             `Закрыт проект ${closingName}. Освободилось ${money(releasedPercent)}%. ` +
             `Получено ${money(net)} ${exitCoin.name} после комиссии. ` +
-            `Монета отличается от базовой монеты проекта, поэтому средства оставлены в фонде без автоматического распределения.`
+            `Монета ожидает обмена в AXM перед распределением.`
         );
     }
 
@@ -3429,6 +3610,7 @@ function escapeAttr(text) {
 function render() {
     renderFund();
     renderDeposits();
+    renderExitAssets();
     renderProjects();
     renderWithdrawals();
     renderHistory();
