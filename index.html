@@ -1422,27 +1422,24 @@ function renderProjects() {
 function openProject(id = null) {
 
     const project = id ? getProject(id) : null;
-
-    let coinOptions = data.coins.map(c => `
-        <option value="${c.id}"
-            ${project && project.coinId === c.id ? "selected" : ""}>
-            ${escapeHtml(c.name)}
-        </option>
-    `).join("");
+    const axmCoin = data.coins.find(c =>
+        String(c.name || "").trim().toUpperCase() === "AXM"
+    );
 
     document.getElementById("modalContent").innerHTML = `
 
         <h2>${project ? "✏️ Изменить проект" : "📊 Новый проект"}</h2>
 
         ${
-            !data.coins.length
+            !axmCoin
             ?
             `
             <div class="status warning">
-                Сначала нужно создать монету.
+                Для проектов нужна монета <b>AXM</b>.<br>
+                Сначала создай AXM в фонде.
             </div>
 
-            <button onclick="openCoin()">＋ Создать монету</button>
+            <button onclick="openCoin()">＋ Создать AXM</button>
             `
             :
             `
@@ -1451,12 +1448,15 @@ function openProject(id = null) {
                 value="${project ? escapeAttr(project.name) : ""}"
                 placeholder="Например: Axiome">
 
-            <label>Монета</label>
-            <select id="projectCoin">
-                ${coinOptions}
-            </select>
+            <input id="projectCoin"
+                type="hidden"
+                value="${axmCoin.id}">
 
-            <label>Процент распределения</label>
+            <div class="status">
+                Монета проекта: <b>AXM</b>
+            </div>
+
+            <label>Процент распределения AXM</label>
             <input id="projectPercent"
                 type="number"
                 step="0.01"
@@ -1464,7 +1464,8 @@ function openProject(id = null) {
                 placeholder="Например: 20">
 
             <div class="small">
-                Все проекты одной монеты должны в сумме составлять ровно 100%.
+                Все активные проекты распределяют один общий пул AXM
+                и в сумме должны составлять ровно 100%.
             </div>
 
             <button onclick="saveProject('${id || ""}')">
@@ -1474,16 +1475,22 @@ function openProject(id = null) {
         }
     `;
 
-    // ВАЖНО: раньше содержимое модального окна создавалось,
-    // но само окно не открывалось. Поэтому кнопки "＋ Проект"
-    // и "✏️ Изменить" визуально нажимались, но ничего не происходило.
     openModal();
 }
 
 function saveProject(id) {
 
     const name = document.getElementById("projectName").value.trim();
-    const coinId = document.getElementById("projectCoin").value;
+    const axmCoin = data.coins.find(c =>
+        String(c.name || "").trim().toUpperCase() === "AXM"
+    );
+
+    if (!axmCoin) {
+        alert("Сначала создай монету AXM в фонде.");
+        return;
+    }
+
+    const coinId = axmCoin.id;
     const percent = Number(document.getElementById("projectPercent").value);
 
     if (!name || !coinId || !Number.isFinite(percent) || percent < 0 || percent > 100) {
@@ -1503,15 +1510,34 @@ function saveProject(id) {
     const total = otherTotal + percent;
 
     /*
-       Если после создания/изменения проекта сумма становится больше 100%,
-       не блокируем действие. Открываем экран перераспределения, где
-       пользователь сам выбирает, у каких проектов уменьшить процент.
+       Если для этой монеты уже есть проекты, любое создание/изменение,
+       которое меняет общий процент, должно пройти через перераспределение.
+       Особенно важно при уже заполненных 100%: новый проект на 1%
+       обязан забрать этот 1% у существующих проектов.
     */
-    if (total > 100.000001) {
+    const existingProject = id ? getProject(id) : null;
+    const oldPercentSameCoin =
+        existingProject && existingProject.coinId === coinId
+        ? Number(existingProject.percent || 0)
+        : 0;
+
+    const changesAllocation =
+        !id ||
+        !existingProject ||
+        existingProject.coinId !== coinId ||
+        Math.abs(percent - oldPercentSameCoin) > 0.000001;
+
+    if (otherProjects.length && changesAllocation) {
         openProjectRedistribution(id, name, coinId, percent);
         return;
     }
 
+    /*
+       Для первой записи по монете сохраняем напрямую.
+       Если проектов уже нет, сумма может быть меньше 100% — это стартовая
+       настройка. Как только появляется второй проект, распределение
+       подтверждается через отдельное окно.
+    */
     commitProject(id, name, coinId, percent);
 }
 
@@ -1572,6 +1598,7 @@ function openProjectRedistribution(id, name, coinId, percent) {
 
     const total = otherTotal + percent;
     const excess = total - 100;
+    const requiredChange = Math.abs(100 - total);
 
     const rows = otherProjects.map(p => `
         <div class="coin-card">
@@ -1600,10 +1627,15 @@ function openProjectRedistribution(id, name, coinId, percent) {
         <h2>⚖️ Перераспределить проценты</h2>
 
         <div class="status warning">
-            ${coin ? escapeHtml(coin.name) : "Монета"} уже распределена.
-            После добавления получится <b>${money(total)}%</b>.<br>
-            Нужно уменьшить другие проекты минимум на
-            <b>${money(excess)}%</b>, чтобы итог снова был ровно 100%.
+            ${coin ? escapeHtml(coin.name) : "Монета"}: после изменения получится
+            <b>${money(total)}%</b>.<br>
+            ${
+                total > 100.000001
+                ? `Нужно убрать у существующих проектов <b>${money(excess)}%</b>, чтобы итог снова был 100%.`
+                : total < 99.999999
+                ? `Нужно добавить существующим проектам ещё <b>${money(requiredChange)}%</b>, чтобы итог был 100%.`
+                : `Подтверди новое распределение. Итог должен остаться ровно 100%.`
+            }
         </div>
 
         <div style="margin-top:14px">
