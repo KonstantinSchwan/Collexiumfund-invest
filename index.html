@@ -304,6 +304,56 @@ label{
     button{font-size:13px}
 }
 
+
+/* TOP TABS: Фонд / Проекты / История */
+body .container > nav{
+    position:sticky;
+    top:8px;
+    z-index:90;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:6px;
+    width:100%;
+    margin:0 0 18px;
+    padding:6px;
+    border:1px solid #dde3e9;
+    border-radius:16px;
+    background:rgba(255,255,255,.95);
+    box-shadow:0 5px 20px rgba(35,45,58,.08);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+}
+
+body .container > nav button{
+    width:auto;
+    min-height:45px;
+    margin:0;
+    padding:8px 6px;
+    border:0;
+    border-radius:11px;
+    background:transparent;
+    color:#77828e;
+    font-size:13px;
+}
+
+body .container > nav button.active{
+    background:#eef1ff;
+    color:#3f5be1;
+}
+
+/* Only one main page is visible at a time */
+#pageFund,
+#pageProjects,
+#pageHistory{
+    display:none;
+}
+
+#pageFund.active-page,
+#pageProjects.active-page,
+#pageHistory.active-page{
+    display:block;
+}
+
 </style>
 </head>
 
@@ -455,30 +505,30 @@ if (window.Telegram && Telegram.WebApp) {
 
 function showPage(page) {
 
-    document.getElementById("pageFund").classList.add("hidden");
-    document.getElementById("pageProjects").classList.add("hidden");
-    document.getElementById("pageHistory").classList.add("hidden");
+    const pages = {
+        fund: document.getElementById("pageFund"),
+        projects: document.getElementById("pageProjects"),
+        history: document.getElementById("pageHistory")
+    };
 
-    document.getElementById("navFund").classList.remove("active");
-    document.getElementById("navProjects").classList.remove("active");
-    document.getElementById("navHistory").classList.remove("active");
+    const navs = {
+        fund: document.getElementById("navFund"),
+        projects: document.getElementById("navProjects"),
+        history: document.getElementById("navHistory")
+    };
 
-    if (page === "fund") {
-        document.getElementById("pageFund").classList.remove("hidden");
-        document.getElementById("navFund").classList.add("active");
-    }
+    Object.values(pages).forEach(el => {
+        if (el) el.classList.remove("active-page");
+    });
 
-    if (page === "projects") {
-        document.getElementById("pageProjects").classList.remove("hidden");
-        document.getElementById("navProjects").classList.add("active");
-    }
+    Object.values(navs).forEach(el => {
+        if (el) el.classList.remove("active");
+    });
 
-    if (page === "history") {
-        document.getElementById("pageHistory").classList.remove("hidden");
-        document.getElementById("navHistory").classList.add("active");
-    }
+    if (pages[page]) pages[page].classList.add("active-page");
+    if (navs[page]) navs[page].classList.add("active");
 
-    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* =========================
@@ -2845,6 +2895,7 @@ function render() {
 }
 
 render();
+showPage('fund');
 
 </script>
 
