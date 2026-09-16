@@ -8,177 +8,372 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
-* { box-sizing: border-box; }
 
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #f4f6f8;
-    color: #17202a;
+:root{
+    --bg:#080a0d;
+    --bg-soft:#0d1014;
+    --card:#11151a;
+    --card-2:#171c22;
+    --border:#252c34;
+    --border-soft:#1c2229;
+    --text:#f5f7fa;
+    --muted:#8b949e;
+    --accent:#e8b84a;
+    --accent-soft:rgba(232,184,74,.12);
+    --green:#36d399;
+    --green-soft:rgba(54,211,153,.12);
+    --red:#ff5d68;
+    --red-soft:rgba(255,93,104,.12);
+    --blue:#69a7ff;
+    --radius:18px;
 }
 
-.container {
-    max-width: 700px;
-    margin: auto;
-    padding: 16px;
+*{
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
 }
 
-h1 { margin: 5px 0 18px; font-size: 25px; }
-h2 { font-size: 20px; margin-top: 0; }
-
-.card {
-    background: white;
-    border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+html{
+    background:var(--bg);
 }
 
-.coin-card, .project-card {
-    border: 1px solid #e3e7eb;
-    border-radius: 12px;
-    padding: 13px;
-    margin-top: 10px;
+body{
+    margin:0;
+    padding:0 0 92px;
+    background:
+        radial-gradient(circle at 50% -180px, rgba(232,184,74,.09), transparent 420px),
+        linear-gradient(180deg,#0a0d11 0%,var(--bg) 45%);
+    color:var(--text);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    min-height:100vh;
+    line-height:1.45;
 }
 
-.row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
+body::before{
+    content:"";
+    display:block;
+    height:1px;
 }
 
-.amount { font-size: 22px; font-weight: bold; }
-.small { font-size: 13px; color: #6b7280; }
-
-button {
-    border: 0;
-    border-radius: 11px;
-    padding: 11px 15px;
-    font-size: 15px;
-    cursor: pointer;
-    background: #2481cc;
-    color: white;
-    margin-top: 8px;
+.container{
+    width:min(100%,760px);
+    margin:0 auto;
+    padding:22px 16px 32px;
 }
 
-button.secondary { background: #e9eef3; color: #17202a; }
-button.danger { background: #e55353; }
-button.green { background: #27a66f; }
-
-input, select {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ccd3da;
-    border-radius: 10px;
-    margin-top: 6px;
-    margin-bottom: 10px;
-    font-size: 16px;
-    background: white;
+h1{
+    font-size:27px;
+    line-height:1.15;
+    margin:8px 0 22px;
+    letter-spacing:-.7px;
+    font-weight:800;
 }
 
-label { font-size: 13px; color: #5b6470; }
-
-nav {
-    display: flex;
-    gap: 5px;
-    background: white;
-    padding: 6px;
-    border-radius: 14px;
-    margin-bottom: 15px;
-    position: sticky;
-    top: 5px;
-    z-index: 10;
+h2{
+    font-size:20px;
+    margin:0 0 16px;
+    letter-spacing:-.35px;
 }
 
-nav button {
-    flex: 1;
-    margin: 0;
-    background: transparent;
-    color: #555;
-    padding: 10px 5px;
+h3{
+    font-size:16px;
+    margin:0 0 10px;
 }
 
-nav button.active { background: #2481cc; color: white; }
-
-.hidden { display: none !important; }
-
-.total { font-size: 14px; margin-top: 5px; }
-
-.status {
-    padding: 7px 10px;
-    border-radius: 8px;
-    background: #eef5ff;
-    color: #2471b8;
-    display: inline-block;
-    font-size: 13px;
-    margin-top: 8px;
+.card{
+    position:relative;
+    background:linear-gradient(180deg,rgba(23,28,34,.96),rgba(15,19,24,.98));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:17px;
+    margin:0 0 12px;
+    overflow:hidden;
 }
 
-.warning { background: #fff4d6; color: #8a6200; }
-.success { background: #e5f8ef; color: #168553; }
-.error { background: #ffe8e8; color: #bd3030; }
-
-hr {
-    border: 0;
-    border-top: 1px solid #eee;
-    margin: 15px 0;
+.card::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    border-radius:inherit;
+    background:linear-gradient(135deg,rgba(255,255,255,.025),transparent 35%);
 }
 
-.modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.45);
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    z-index: 100;
+.card > *{
+    position:relative;
+    z-index:1;
 }
 
-.modal-box {
-    background: white;
-    width: 100%;
-    max-width: 700px;
-    padding: 20px;
-    border-radius: 20px 20px 0 0;
-    max-height: 90vh;
-    overflow-y: auto;
+.amount{
+    font-size:28px;
+    line-height:1.15;
+    font-weight:800;
+    letter-spacing:-.7px;
+    margin-top:4px;
+    font-variant-numeric:tabular-nums;
 }
 
-.close { float: right; background: #eee; color: #333; margin: 0; }
-
-.empty { text-align: center; color: #777; padding: 25px 10px; }
-
-.history-item {
-    padding: 10px 0;
-    border-bottom: 1px solid #eee;
+.small{
+    color:var(--muted);
+    font-size:12.5px;
+    line-height:1.45;
 }
 
-.plus { color: #15945c; }
-.minus { color: #c93636; }
-
-.deposit-item {
-    border: 1px solid #e3e7eb;
-    border-radius: 12px;
-    padding: 13px;
-    margin-top: 10px;
+b{
+    font-weight:700;
 }
 
-.deposit-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+hr{
+    border:0;
+    border-top:1px solid var(--border-soft);
+    margin:16px 0;
 }
 
-.deposit-actions button {
-    margin-top: 8px;
+button{
+    width:100%;
+    min-height:46px;
+    border:1px solid var(--border);
+    border-radius:13px;
+    padding:11px 14px;
+    margin-top:9px;
+    background:var(--card-2);
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .12s ease,border-color .12s ease,background .12s ease;
 }
 
-.danger-text {
-    color: #bd3030;
-    font-size: 13px;
-    margin-top: 8px;
+button:active{
+    transform:scale(.985);
 }
+
+button.green{
+    background:linear-gradient(180deg,#40dba1,#2fc78e);
+    border-color:#45dda7;
+    color:#06120d;
+}
+
+button.danger{
+    background:var(--red-soft);
+    border-color:rgba(255,93,104,.28);
+    color:#ff858d;
+}
+
+button.secondary{
+    background:transparent;
+    border-color:var(--border);
+    color:#c8d0d9;
+}
+
+input,select,textarea{
+    width:100%;
+    min-height:48px;
+    margin:6px 0 12px;
+    padding:11px 13px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    outline:none;
+    background:#0c1014;
+    color:var(--text);
+    font-size:16px;
+    font-family:inherit;
+}
+
+input:focus,select:focus,textarea:focus{
+    border-color:rgba(232,184,74,.7);
+    box-shadow:0 0 0 3px rgba(232,184,74,.09);
+}
+
+input:disabled{
+    opacity:.65;
+}
+
+label{
+    display:block;
+    margin-top:7px;
+    color:#cbd2da;
+    font-size:13px;
+    font-weight:650;
+}
+
+.status{
+    border:1px solid var(--border);
+    background:#0d1116;
+    border-radius:12px;
+    padding:10px 12px;
+    margin-top:10px;
+    font-size:13px;
+}
+
+.status.success{
+    background:var(--green-soft);
+    border-color:rgba(54,211,153,.24);
+    color:#9ce9ca;
+}
+
+.status.warning{
+    background:var(--accent-soft);
+    border-color:rgba(232,184,74,.25);
+    color:#ecd18b;
+}
+
+.status.error{
+    background:var(--red-soft);
+    border-color:rgba(255,93,104,.25);
+    color:#ff9ba2;
+}
+
+/* Bottom navigation */
+.nav,.bottom-nav,nav{
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+}
+
+.bottom-nav{
+    position:fixed;
+    left:50%;
+    bottom:12px;
+    transform:translateX(-50%);
+    width:min(calc(100% - 24px),720px);
+    z-index:100;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:6px;
+    padding:7px;
+    background:rgba(15,19,24,.92);
+    border:1px solid var(--border);
+    border-radius:19px;
+}
+
+.bottom-nav button{
+    margin:0;
+    min-height:50px;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    border-radius:13px;
+    padding:8px 6px;
+    font-size:12px;
+}
+
+.bottom-nav button.active,
+.bottom-nav .active{
+    background:var(--accent-soft);
+    color:#f2cc75;
+}
+
+/* Existing nav fallback */
+.nav{
+    position:fixed;
+    left:50%;
+    bottom:12px;
+    transform:translateX(-50%);
+    width:min(calc(100% - 24px),720px);
+    z-index:100;
+    display:flex;
+    gap:6px;
+    padding:7px;
+    background:rgba(15,19,24,.92);
+    border:1px solid var(--border);
+    border-radius:19px;
+}
+
+.nav button{
+    flex:1;
+    margin:0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    min-height:50px;
+}
+
+.nav button.active{
+    background:var(--accent-soft);
+    color:#f2cc75;
+}
+
+/* Modal */
+.modal{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+    padding:16px;
+    background:rgba(0,0,0,.72);
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+}
+
+.modal.show,
+.modal.open{
+    display:flex;
+}
+
+.modal-content{
+    width:min(100%,620px);
+    max-height:88vh;
+    overflow:auto;
+    padding:20px;
+    border:1px solid var(--border);
+    border-radius:22px;
+    background:linear-gradient(180deg,#171c22,#0e1217);
+    color:var(--text);
+}
+
+.close{
+    color:var(--muted);
+}
+
+/* Financial rows / generic flex helpers already present in markup */
+.row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+}
+
+.coin{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.coin::before{
+    content:"";
+    width:9px;
+    height:9px;
+    flex:0 0 9px;
+    border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);
+}
+
+/* Make project cards visually stronger */
+#projects .card,
+.project-card{
+    border-color:#2a323b;
+}
+
+/* Compact desktop polish */
+@media (min-width:700px){
+    .container{padding-top:30px}
+    .card{padding:19px}
+    button:hover{border-color:#3a444f}
+    button.green:hover{border-color:#74e8bb}
+}
+
+/* Mobile */
+@media (max-width:420px){
+    .container{padding-left:12px;padding-right:12px}
+    h1{font-size:24px}
+    .amount{font-size:25px}
+    .card{padding:15px;border-radius:16px}
+    button{font-size:13px}
+}
+
 </style>
 </head>
 
