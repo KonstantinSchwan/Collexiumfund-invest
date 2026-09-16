@@ -1061,6 +1061,10 @@ function renderProjects() {
                 🔄 Обменять монету
             </button>
 
+            <button onclick="openManualProjectInvestment('${p.id}')">
+                ➕ Добавить инвестицию вручную
+            </button>
+
             ${
                 p.assetName
                 ? `
@@ -1701,6 +1705,136 @@ function exchangeProjectCoins(id) {
 /* =========================
    ИНВЕСТИЦИЯ АКТИВА ПРОЕКТА
 ========================= */
+
+
+/* =========================
+   РУЧНОЕ ДОБАВЛЕНИЕ УЖЕ СДЕЛАННОЙ ИНВЕСТИЦИИ
+   Например: пользователь реально отправил 100 USDT в проект,
+   а баланс фонда уже был скорректирован вручную.
+========================= */
+
+function openManualProjectInvestment(id) {
+
+    const p = getProject(id);
+
+    const coinOptions = data.coins.map(c => `
+        <option value="${c.id}">
+            ${escapeHtml(c.name)} — баланс фонда ${money(c.balance)}
+        </option>
+    `).join("");
+
+    if (!coinOptions) {
+        alert("Сначала добавьте монету в фонд.");
+        return;
+    }
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>➕ Добавить инвестицию вручную</h2>
+
+        <p>
+            <b>${escapeHtml(p.name)}</b>
+        </p>
+
+        <div class="status warning">
+            Используй это, если инвестиция уже была сделана в реальности,
+            но ещё не записана в проект.
+        </div>
+
+        <label>Какую монету инвестировали?</label>
+        <select id="manualInvestmentCoin">
+            ${coinOptions}
+        </select>
+
+        <label>Сколько инвестировали?</label>
+        <input id="manualInvestmentAmount"
+            type="number"
+            step="any"
+            min="0"
+            placeholder="Например: 100">
+
+        <label class="form-check" style="display:flex;gap:10px;align-items:flex-start;margin-top:12px">
+            <input id="manualInvestmentReduceFund" type="checkbox">
+            <span>
+                Также вычесть эту сумму из текущего баланса фонда.
+                <div class="small">
+                    Не включай, если ты уже вручную исправил баланс фонда после этой инвестиции.
+                </div>
+            </span>
+        </label>
+
+        <button class="green" onclick="saveManualProjectInvestment('${id}')">
+            💾 Записать инвестицию
+        </button>
+    `;
+
+    openModal();
+}
+
+
+function saveManualProjectInvestment(id) {
+
+    const p = getProject(id);
+    const coinId = document.getElementById("manualInvestmentCoin").value;
+    const coin = getCoin(coinId);
+    const amount = Number(document.getElementById("manualInvestmentAmount").value);
+    const reduceFund = document.getElementById("manualInvestmentReduceFund").checked;
+
+    if (!coin) {
+        alert("Монета не найдена.");
+        return;
+    }
+
+    if (!amount || amount <= 0) {
+        alert("Введите сумму инвестиции.");
+        return;
+    }
+
+    if (reduceFund && amount > Number(coin.balance) + 0.00000001) {
+        alert(`В балансе фонда недостаточно ${coin.name}.`);
+        return;
+    }
+
+    const coinName = coin.name.toUpperCase();
+
+    // Если инвестиция в базовой монете проекта — используем старое поле invested.
+    if (coin.id === p.coinId) {
+        p.invested = Number(p.invested || 0) + amount;
+    } else {
+        // Для внешнего актива проекта (USDT, CLX и т.д.)
+        if (
+            p.assetName &&
+            p.assetName.toUpperCase() !== coinName &&
+            (Number(p.assetAvailable || 0) > 0.00000001 ||
+             Number(p.assetInvested || 0) > 0.00000001)
+        ) {
+            alert(
+                `В проекте уже используется актив ${p.assetName}. ` +
+                `Нельзя смешать его с ${coinName} в одном балансе проекта.`
+            );
+            return;
+        }
+
+        p.assetName = coinName;
+        p.assetInvested = Number(p.assetInvested || 0) + amount;
+    }
+
+    if (reduceFund) {
+        coin.balance -= amount;
+    }
+
+    addHistory(
+        "invest",
+        `Ручная инвестиция: ${money(amount)} ${coin.name} → ${p.name}` +
+        (reduceFund
+            ? `. Баланс фонда уменьшен на ${money(amount)} ${coin.name}.`
+            : `. Баланс фонда не изменён.`)
+    );
+
+    save();
+    closeModal();
+    render();
+}
+
 
 function openInvestAsset(id) {
 
