@@ -280,6 +280,7 @@ if (!Array.isArray(data.projects)) data.projects = [];
 if (!Array.isArray(data.withdrawals)) data.withdrawals = [];
 if (!Array.isArray(data.deposits)) data.deposits = [];
 if (!Array.isArray(data.history)) data.history = [];
+if (!Array.isArray(data.operations)) data.operations = [];
 
 /* Совместимость: отдельная монета/актив внутри проекта */
 data.projects.forEach(p => {
@@ -1065,6 +1066,12 @@ function renderProjects() {
                 ➕ Добавить инвестицию вручную
             </button>
 
+            <button onclick="openAdjustProjectInvestment('${p.id}')">
+                ✏️ Исправить инвестированное
+            </button>
+
+            ${renderProjectOperations(p.id)}
+
             ${
                 p.assetName
                 ? `
@@ -1691,6 +1698,18 @@ function exchangeProjectCoins(id) {
         }
     }
 
+    addOperation({
+        type: "exchange",
+        projectId: p.id,
+        fromType,
+        fromCoin: fromName,
+        toCoin: toCoinName,
+        fromAmount,
+        toAmount,
+        toWasBase: !!baseCoin && toCoinName === baseCoin.name.toUpperCase(),
+        label: `Обмен ${money(fromAmount)} ${fromName} → ${money(toAmount)} ${toCoinName}`
+    });
+
     addHistory(
         "exchange",
         `${p.name}: обмен ${money(fromAmount)} ${fromName} → ${money(toAmount)} ${toCoinName}`
@@ -1712,6 +1731,226 @@ function exchangeProjectCoins(id) {
    Например: пользователь реально отправил 100 USDT в проект,
    а баланс фонда уже был скорректирован вручную.
 ========================= */
+
+
+/* =========================
+   СТРУКТУРИРОВАННАЯ ИСТОРИЯ ОПЕРАЦИЙ ПРОЕКТА
+   Новые ручные инвестиции и обмены можно отменять.
+========================= */
+
+function addOperation(op) {
+    if (!Array.isArray(data.operations)) data.operations = [];
+    data.operations.unshift({
+        id: Date.now().toString() + Math.random().toString(16).slice(2),
+        date: dateNow(),
+        cancelled: false,
+        ...op
+    });
+}
+
+function renderProjectOperations(projectId) {
+
+    if (!Array.isArray(data.operations)) return "";
+
+    const ops = data.operations
+        .filter(o => o.projectId === projectId)
+        .slice(0, 8);
+
+    if (!ops.length) return "";
+
+    return `
+        <div style="margin-top:14px">
+            <div class="small"><b>Последние операции проекта</b></div>
+            ${ops.map(o => `
+                <div class="status ${o.cancelled ? "" : "success"}" style="margin-top:7px">
+                    <div>
+                        ${escapeHtml(o.label || o.type)}
+                        ${o.cancelled ? " — ОТМЕНЕНО" : ""}
+                    </div>
+                    <div class="small">${escapeHtml(o.date || "")}</div>
+                    ${
+                        !o.cancelled && (o.type === "manual-invest" || o.type === "exchange")
+                        ? `<button class="danger" onclick="cancelProjectOperation('${o.id}')">↩️ Отменить</button>`
+                        : ""
+                    }
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+function cancelProjectOperation(operationId) {
+
+    const op = data.operations.find(o => o.id === operationId);
+
+    if (!op || op.cancelled) {
+        alert("Операция уже отменена или не найдена.");
+        return;
+    }
+
+    const p = getProject(op.projectId);
+
+    if (!p) {
+        alert("Проект не найден.");
+        return;
+    }
+
+    if (!confirm(
+        `Отменить операцию?\n\n${op.label || op.type}\n\n` +
+        `Связанные балансы будут возвращены в состояние до этой операции.`
+    )) return;
+
+    if (op.type === "manual-invest") {
+
+        const coin = getCoin(op.coinId);
+
+        if (op.isBase) {
+            if (Number(p.invested || 0) + 0.00000001 < op.amount) {
+                alert("Нельзя отменить: инвестированная сумма проекта уже меньше суммы этой операции.");
+                return;
+            }
+            p.invested -= op.amount;
+        } else {
+            if (
+                p.assetName.toUpperCase() !== op.coinName.toUpperCase() ||
+                Number(p.assetInvested || 0) + 0.00000001 < op.amount
+            ) {
+                alert("Нельзя отменить: актив или инвестированная сумма проекта уже изменились.");
+                return;
+            }
+            p.assetInvested -= op.amount;
+        }
+
+        if (op.reduceFund && coin) {
+            coin.balance += op.amount;
+        }
+
+    } else if (op.type === "exchange") {
+
+        const fromCoin = data.coins.find(
+            c => c.name.toLowerCase() === op.fromCoin.toLowerCase()
+        );
+        const toCoin = data.coins.find(
+            c => c.name.toLowerCase() === op.toCoin.toLowerCase()
+        );
+        const baseCoin = getCoin(p.coinId);
+
+        if (op.fromType === "base") {
+
+            if (
+                p.assetName.toUpperCase() !== op.toCoin.toUpperCase() ||
+                Number(p.assetAvailable || 0) + 0.00000001 < op.toAmount
+            ) {
+                alert("Нельзя отменить этот обмен: полученные монеты уже были использованы или актив проекта изменился.");
+                return;
+            }
+
+            p.available += op.fromAmount;
+            p.assetAvailable -= op.toAmount;
+
+            if (fromCoin) fromCoin.balance += op.fromAmount;
+            if (toCoin) toCoin.balance -= op.toAmount;
+
+            if (
+                Number(p.assetAvailable) <= 0.00000001 &&
+                Number(p.assetInvested || 0) <= 0.00000001
+            ) {
+                p.assetAvailable = 0;
+                p.assetName = "";
+            }
+
+        } else if (op.toWasBase) {
+
+            if (Number(p.available || 0) + 0.00000001 < op.toAmount) {
+                alert("Нельзя отменить: полученные базовые монеты проекта уже использованы.");
+                return;
+            }
+
+            p.available -= op.toAmount;
+            p.assetName = op.fromCoin;
+            p.assetAvailable = Number(p.assetAvailable || 0) + op.fromAmount;
+
+            if (fromCoin) fromCoin.balance += op.fromAmount;
+            if (toCoin) toCoin.balance -= op.toAmount;
+
+        } else {
+            alert("Отмена обмена одной проектной монеты на другую пока недоступна после последующих изменений.");
+            return;
+        }
+    }
+
+    op.cancelled = true;
+
+    addHistory(
+        "cancel",
+        `Отменена операция: ${op.label || op.type}`
+    );
+
+    save();
+    render();
+}
+
+
+function openAdjustProjectInvestment(id) {
+
+    const p = getProject(id);
+    const baseCoin = getCoin(p.coinId);
+
+    const options = [
+        `<option value="base">${escapeHtml(baseCoin.name)} — сейчас ${money(p.invested || 0)}</option>`,
+        ...(p.assetName ? [
+            `<option value="asset">${escapeHtml(p.assetName)} — сейчас ${money(p.assetInvested || 0)}</option>`
+        ] : [])
+    ].join("");
+
+    document.getElementById("modalContent").innerHTML = `
+        <h2>✏️ Исправить инвестированное</h2>
+        <p><b>${escapeHtml(p.name)}</b></p>
+
+        <div class="status warning">
+            Меняется только учёт инвестированной суммы проекта.
+            Баланс фонда автоматически не меняется.
+        </div>
+
+        <label>Монета</label>
+        <select id="adjustInvestType">${options}</select>
+
+        <label>Фактически инвестировано сейчас</label>
+        <input id="adjustInvestAmount" type="number" step="any" min="0">
+
+        <button class="green" onclick="saveAdjustedProjectInvestment('${id}')">
+            💾 Сохранить
+        </button>
+    `;
+
+    openModal();
+}
+
+function saveAdjustedProjectInvestment(id) {
+
+    const p = getProject(id);
+    const type = document.getElementById("adjustInvestType").value;
+    const amount = Number(document.getElementById("adjustInvestAmount").value);
+
+    if (!Number.isFinite(amount) || amount < 0) {
+        alert("Введите корректную сумму.");
+        return;
+    }
+
+    if (type === "base") {
+        const old = Number(p.invested || 0);
+        p.invested = amount;
+        addHistory("adjust", `${p.name}: инвестировано ${money(old)} → ${money(amount)} ${getCoin(p.coinId).name}`);
+    } else {
+        const old = Number(p.assetInvested || 0);
+        p.assetInvested = amount;
+        addHistory("adjust", `${p.name}: инвестировано ${money(old)} → ${money(amount)} ${p.assetName}`);
+    }
+
+    save();
+    closeModal();
+    render();
+}
 
 function openManualProjectInvestment(id) {
 
@@ -1821,6 +2060,17 @@ function saveManualProjectInvestment(id) {
     if (reduceFund) {
         coin.balance -= amount;
     }
+
+    addOperation({
+        type: "manual-invest",
+        projectId: p.id,
+        coinId: coin.id,
+        coinName: coin.name,
+        amount,
+        reduceFund,
+        isBase: coin.id === p.coinId,
+        label: `Ручная инвестиция ${money(amount)} ${coin.name}`
+    });
 
     addHistory(
         "invest",
