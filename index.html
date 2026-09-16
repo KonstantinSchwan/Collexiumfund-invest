@@ -1451,12 +1451,33 @@ function exchangeToAsset(id) {
     }
 
     p.assetName = assetName;
+
+    // AXM/исходная монета реально уходит из фонда при обмене.
     p.available -= fromAmount;
+    coin.balance -= fromAmount;
+
+    // Полученная монета становится реальным активом фонда
+    // и одновременно учитывается внутри конкретного проекта.
+    let receivedCoin = data.coins.find(
+        c => c.name.toLowerCase() === assetName.toLowerCase()
+    );
+
+    if (!receivedCoin) {
+        receivedCoin = {
+            id: (Date.now() + 1).toString(),
+            name: assetName,
+            balance: 0
+        };
+        data.coins.push(receivedCoin);
+    }
+
+    receivedCoin.balance += assetAmount;
     p.assetAvailable = Number(p.assetAvailable || 0) + assetAmount;
 
     addHistory(
         "exchange",
-        `${p.name}: обмен ${money(fromAmount)} ${coin.name} → ${money(assetAmount)} ${assetName}`
+        `${p.name}: обмен ${money(fromAmount)} ${coin.name} → ${money(assetAmount)} ${assetName}. ` +
+        `Баланс фонда: -${money(fromAmount)} ${coin.name}, +${money(assetAmount)} ${assetName}`
     );
 
     save();
@@ -1514,8 +1535,21 @@ function investAsset(id) {
         return;
     }
 
+    const assetCoin = data.coins.find(
+        c => c.name.toLowerCase() === p.assetName.toLowerCase()
+    );
+
+    if (!assetCoin || Number(assetCoin.balance) + 0.00000001 < amount) {
+        alert(`В балансе фонда недостаточно ${p.assetName}.`);
+        return;
+    }
+
     p.assetAvailable -= amount;
     p.assetInvested = Number(p.assetInvested || 0) + amount;
+
+    // После фактической инвестиции монета больше не лежит
+    // в ликвидном балансе фонда.
+    assetCoin.balance -= amount;
 
     addHistory(
         "invest",
